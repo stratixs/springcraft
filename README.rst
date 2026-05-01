@@ -24,7 +24,7 @@ Installation
 
    $ pip install springcraft
 
-or 
+or
 
 .. code-block:: console
 
@@ -41,12 +41,22 @@ via *pip*:
    $ git clone https://github.com/biotite-dev/springcraft.git
    $ pip install ./springcraft
 
-A development conda environment with all required dependencies for testing
-can be installed from `environment.yml`
+Development
+-----------
 
-Scripts to generate reference files for tests are stored in tests/data; 
+For development and testing first create a conda enviroment from the
+`environment.yml` and than let poetry install the required dependencies.
+
+.. code-block:: console
+
+   $ conda env create -f environment.yml
+   $ conda activate springcraft-dev
+   $ poetry config virtualenvs.create false
+   $ poetry install
+
+Scripts to generate reference files for tests are stored in tests/data;
 a separate environment to rerun these locally can be found in `test_create_data_env.yml`.
-BioPhysConnectoR has to be installed separately. 
+BioPhysConnectoR has to be installed separately.
 
 Example
 =======
