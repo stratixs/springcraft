@@ -7,8 +7,13 @@ __name__ = "springcraft"
 __author__ = "Patrick Kunzmann"
 __all__ = ["ANM"]
 
+from typing import Literal
+
 import biotite.structure as struc
+import biotite.structure.info as strucinfo
 import numpy as np
+
+from springcraft.forcefield import ForceField
 
 from . import nma
 from .interaction import compute_hessian
@@ -59,8 +64,24 @@ class ANM:
         The mass for each atom, `None` if no mass weighting is applied.
     """
 
-    def __init__(self, atoms, force_field, masses=None, use_cell_list=True):
-        self._coord = struc.coord(atoms)
+    _coord: np.ndarray
+    _covariance: np.ndarray | None
+    _ff: ForceField
+    _kirchhoff: np.ndarray | None
+    _masses: np.ndarray | None
+    _masses_weight_matrix: np.ndarray | None
+    _natoms: int
+    _use_cell_list: bool
+
+    def __init__(
+        self,
+        atoms: struc.AtomArray | np.ndarray,
+        force_field: ForceField,
+        masses: bool | np.ndarray | None = None,
+        use_cell_list: bool = True,
+    ):
+        self._coord = np.asarray(struc.coord(atoms))
+        self._natoms = len(self._coord)
         self._ff = force_field
         self._use_cell_list = use_cell_list
 
@@ -73,15 +94,13 @@ class ANM:
                 )
             self._masses = np.array(
                 [
-                    struc.info.mass(res_name, is_residue=True)
-                    for res_name in atoms.res_name
+                    strucinfo.mass(res_name, is_residue=True)
+                    for res_name in atoms.res_name  # pyright: ignore[reportOptionalIterable]
                 ]
             )
         else:
-            if len(masses) != atoms.array_length():
-                raise IndexError(
-                    f"{len(masses)} masses for " f"{atoms.array_length()} atoms given"
-                )
+            if len(masses) != self._natoms:
+                raise IndexError(f"{len(masses)} masses for {self._natoms} atoms given")
             if np.any(masses == 0):
                 raise ValueError("Masses must not be 0")
             self._masses = np.array(masses, dtype=float)
@@ -99,11 +118,11 @@ class ANM:
         self._covariance = None
 
     @property
-    def masses(self):
+    def masses(self) -> np.ndarray | None:
         return self._masses
 
     @property
-    def hessian(self):
+    def hessian(self) -> np.ndarray:
         if self._hessian is None:
             if self._covariance is None:
                 self._hessian, _ = compute_hessian(
@@ -118,11 +137,11 @@ class ANM:
         return self._hessian
 
     @hessian.setter
-    def hessian(self, value):
-        if value.shape != (len(self._coord) * 3, len(self._coord) * 3):
+    def hessian(self, value: np.ndarray):
+        if value.shape != (self._natoms * 3, self._natoms * 3):
             raise IndexError(
                 f"Expected shape "
-                f"{(len(self._coord) * 3, len(self._coord) * 3)}, "
+                f"{(self._natoms * 3, self._natoms * 3)}, "
                 f"got {value.shape}"
             )
         self._hessian = value
@@ -130,24 +149,24 @@ class ANM:
         self._covariance = None
 
     @property
-    def covariance(self):
+    def covariance(self) -> np.ndarray:
         if self._covariance is None:
             self._covariance = np.linalg.pinv(self.hessian, hermitian=True, rcond=1e-6)
         return self._covariance
 
     @covariance.setter
-    def covariance(self, value):
-        if value.shape != (len(self._coord) * 3, len(self._coord) * 3):
+    def covariance(self, value: np.ndarray):
+        if value.shape != (self._natoms * 3, self._natoms * 3):
             raise IndexError(
                 f"Expected shape "
-                f"{(len(self._coord) * 3, len(self._coord) * 3)}, "
+                f"{(self._natoms * 3, self._natoms * 3)}, "
                 f"got {value.shape}"
             )
         self._covariance = value
         # Invalidate dependent values
         self._hessian = None
 
-    def eigen(self):
+    def eigen(self) -> tuple[np.ndarray, np.ndarray]:
         """
         Compute the Eigenvalues and Eigenvectors of the
         *Hessian* matrix.
@@ -166,7 +185,13 @@ class ANM:
         """
         return nma.eigen(self)
 
-    def normal_mode(self, index, amplitude, frames, movement="sine"):
+    def normal_mode(
+        self,
+        index: int,
+        amplitude: int,
+        frames: int,
+        movement: Literal["sine", "triangle"] = "sine",
+    ) -> np.ndarray:
         """
         Create displacements for a trajectory depicting the given normal
         mode.
@@ -192,7 +217,7 @@ class ANM:
             value for an atom is the given value.
         frames : int
             The number of frames (models) per oscillation.
-        movement : {'sinusoidal', 'triangle'}
+        movement : {'sine', 'triangle'}
             Defines how to depict the oscillation.
             If set to ``'sine'`` the atom movement is sinusoidal.
             If set to ``'triangle'`` the atom movement is linear with
@@ -206,7 +231,7 @@ class ANM:
         """
         return nma.normal_mode(self, index, amplitude, frames, movement)
 
-    def linear_response(self, force):
+    def linear_response(self, force: np.ndarray) -> np.ndarray:
         """
         Compute the atom displacement induced by the given force using
         *Linear Response Theory*. [1]_
@@ -237,7 +262,7 @@ class ANM:
         """
         return nma.linear_response(self, force)
 
-    def frequencies(self):
+    def frequencies(self) -> np.ndarray:
         """
         Computes the frequency associated with each mode.
 
@@ -255,7 +280,12 @@ class ANM:
         """
         return nma.frequencies(self)
 
-    def mean_square_fluctuation(self, mode_subset=None, tem=None, tem_factors=K_B):
+    def mean_square_fluctuation(
+        self,
+        mode_subset: np.ndarray | None = None,
+        tem: float | None = None,
+        tem_factors: float = K_B,
+    ) -> np.ndarray:
         """
         Compute the *mean square fluctuation* for the atoms according
         to the ANM.
@@ -288,7 +318,12 @@ class ANM:
         """
         return nma.mean_square_fluctuation(self, mode_subset, tem, tem_factors)
 
-    def bfactor(self, mode_subset=None, tem=None, tem_factors=K_B):
+    def bfactor(
+        self,
+        mode_subset: np.ndarray | None = None,
+        tem: float | None = None,
+        tem_factors: float = K_B,
+    ) -> np.ndarray:
         """
         Computes the isotropic B-factors/temperature factors/
         Deby-Waller factors for atoms/coarse-grained nodes using
@@ -320,7 +355,13 @@ class ANM:
         """
         return nma.bfactor(self, mode_subset, tem, tem_factors)
 
-    def dcc(self, mode_subset=None, norm=True, tem=None, tem_factors=K_B):
+    def dcc(
+        self,
+        mode_subset: np.ndarray | None = None,
+        norm: bool = True,
+        tem: float | None = None,
+        tem_factors: float = K_B,
+    ) -> np.ndarray:
         r"""
         Computes the normalized *dynamic cross-correlation* between
         nodes of the ANM.
@@ -381,7 +422,9 @@ class ANM:
         """
         return nma.dcc(self, mode_subset, norm, tem, tem_factors)
 
-    def prs_effector_sensor(self, norm=True):
+    def prs_effector_sensor(
+        self, norm: bool = True
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Compute the perturbation response scanning matrix following and
         the derived effector and sensor profiles after

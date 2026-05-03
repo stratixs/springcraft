@@ -17,6 +17,8 @@ __all__ = [
     "effector_sensor",
 ]
 
+from typing import Literal
+
 import numpy as np
 
 # -> Import ANM/GNM in functions to prevent circular import error
@@ -26,7 +28,7 @@ N_A = 6.02214076e23
 
 
 ## NMA functions for GNMs/ANMs
-def eigen(enm):
+def eigen(enm) -> tuple[np.ndarray, np.ndarray]:
     """
     Compute the Eigenvalues and Eigenvectors of the
     *Kirchhoff*/*Hessian* matrix for GNMs and ANMs respectively.
@@ -63,7 +65,7 @@ def eigen(enm):
     return eig_values, eig_vectors.T
 
 
-def frequencies(enm):
+def frequencies(enm) -> np.ndarray:
     """
     Computes the frequency associated with each mode.
 
@@ -105,7 +107,12 @@ def frequencies(enm):
     return freq
 
 
-def mean_square_fluctuation(enm, mode_subset=None, tem=None, tem_factors=K_B):
+def mean_square_fluctuation(
+    enm,
+    mode_subset: np.ndarray | None = None,
+    tem: int | float | None = None,
+    tem_factors: int | float = K_B,
+) -> np.ndarray:
     """
     Compute the *mean square fluctuation* for the atoms according
     to the ANM/GNM.
@@ -184,7 +191,12 @@ def mean_square_fluctuation(enm, mode_subset=None, tem=None, tem_factors=K_B):
     return msqf
 
 
-def bfactor(enm, mode_subset=None, tem=None, tem_factors=K_B):
+def bfactor(
+    enm,
+    mode_subset: np.ndarray | None = None,
+    tem: int | float | None = None,
+    tem_factors: int | float = K_B,
+) -> np.ndarray:
     """
     Computes the isotropic B-factors/temperature factors/
     Deby-Waller factors for atoms/coarse-grained nodes using
@@ -230,7 +242,13 @@ def bfactor(enm, mode_subset=None, tem=None, tem_factors=K_B):
     return b_factors
 
 
-def dcc(enm, mode_subset=None, norm=True, tem=None, tem_factors=K_B):
+def dcc(
+    enm,
+    mode_subset: np.ndarray | None = None,
+    norm: bool = True,
+    tem: int | float | None = None,
+    tem_factors: int | float = K_B,
+) -> np.ndarray:
     r"""
     Computes the normalized *dynamic cross-correlation* between
     nodes of the GNM/ANM.
@@ -360,7 +378,13 @@ def dcc(enm, mode_subset=None, norm=True, tem=None, tem_factors=K_B):
 
 
 ## ANM specific functions
-def normal_mode(anm, index, amplitude, frames, movement="sine"):
+def normal_mode(
+    anm,
+    index: int,
+    amplitude: int,
+    frames: int,
+    movement: Literal["sine", "triangle"] = "sine",
+) -> np.ndarray:
     """
     Create displacements for a trajectory depicting the given normal
     mode for ANMs.
@@ -382,7 +406,7 @@ def normal_mode(anm, index, amplitude, frames, movement="sine"):
         value for an atom is the given value.
     frames : int
         The number of frames (models) per oscillation.
-    movement : {'sinusoidal', 'triangle'}
+    movement : {'sine', 'triangle'}
         Defines how to depict the oscillation.
         If set to ``'sine'`` the atom movement is sinusoidal.
         If set to ``'triangle'`` the atom movement is linear with
@@ -419,7 +443,7 @@ def normal_mode(anm, index, amplitude, frames, movement="sine"):
         return disp
 
 
-def linear_response(anm, force):
+def linear_response(anm, force: np.ndarray) -> np.ndarray:
     """
     Compute the atom displacement induced by the given force using
     *Linear Response Theory*. [1]_
@@ -473,7 +497,7 @@ def linear_response(anm, force):
         return np.dot(anm.covariance, force).reshape(len(anm._coord), 3)
 
 
-def prs(anm, norm=True):
+def prs(anm, norm: bool = True) -> np.ndarray:
     """
     Compute the perturbation response scanning matrix following
     Atilgan et al. [1]_
@@ -524,7 +548,7 @@ def prs(anm, norm=True):
     return prs_matrix
 
 
-def effector_sensor(prs_matrix):
+def effector_sensor(prs_matrix: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """
     Compute effector/sensor residues according to the PRS-Matrix
     as described in General et al. [1]_

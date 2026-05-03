@@ -8,7 +8,10 @@ __author__ = "Patrick Kunzmann, Faisal Islam"
 __all__ = ["GNM"]
 
 import biotite.structure as struc
+import biotite.structure.info as strucinfo
 import numpy as np
+
+from springcraft.forcefield import ForceField
 
 from . import nma
 from .interaction import compute_kirchhoff
@@ -53,10 +56,28 @@ class GNM:
         The covariance matrix for this model, i.e. the inverted
         *Kirchhofff* matrix.
         This is not a copy: Create a copy before modifying this matrix.
+    masses : None or ndarray, shape=(n,), dtype=float
+        The mass for each atom, `None` if no mass weighting is applied.
     """
 
-    def __init__(self, atoms, force_field, masses=None, use_cell_list=True):
-        self._coord = struc.coord(atoms)
+    _coord: np.ndarray
+    _covariance: np.ndarray | None
+    _ff: ForceField
+    _kirchhoff: np.ndarray | None
+    _masses: np.ndarray | None
+    _masses_weight_matrix: np.ndarray | None
+    _natoms: int
+    _use_cell_list: bool
+
+    def __init__(
+        self,
+        atoms: struc.AtomArray | np.ndarray,
+        force_field: ForceField,
+        masses=None,
+        use_cell_list=True,
+    ):
+        self._coord = np.asarray(struc.coord(atoms))
+        self._natoms = len(self._coord)
         self._ff = force_field
         self._use_cell_list = use_cell_list
 
@@ -69,15 +90,13 @@ class GNM:
                 )
             self._masses = np.array(
                 [
-                    struc.info.mass(res_name, is_residue=True)
-                    for res_name in atoms.res_name
+                    strucinfo.mass(res_name, is_residue=True)
+                    for res_name in atoms.res_name  # pyright: ignore[reportOptionalIterable]
                 ]
             )
         else:
-            if len(masses) != atoms.array_length():
-                raise IndexError(
-                    f"{len(masses)} masses for " f"{atoms.array_length()} atoms given"
-                )
+            if len(masses) != self._natoms:
+                raise IndexError(f"{len(masses)} masses for {self._natoms} atoms given")
             if np.any(masses == 0):
                 raise ValueError("Masses must not be 0")
             self._masses = np.array(masses, dtype=float)
@@ -92,11 +111,11 @@ class GNM:
         self._covariance = None
 
     @property
-    def masses(self):
+    def masses(self) -> np.ndarray | None:
         return self._masses
 
     @property
-    def kirchhoff(self):
+    def kirchhoff(self) -> np.ndarray:
         if self._kirchhoff is None:
             if self._covariance is None:
                 self._kirchhoff, _ = compute_kirchhoff(
@@ -111,19 +130,17 @@ class GNM:
         return self._kirchhoff
 
     @kirchhoff.setter
-    def kirchhoff(self, value):
-        if value.shape != (len(self._coord), len(self._coord)):
+    def kirchhoff(self, value: np.ndarray):
+        if value.shape != (self._natoms, self._natoms):
             raise ValueError(
-                f"Expected shape "
-                f"{(len(self._coord), len(self._coord))}, "
-                f"got {value.shape}"
+                f"Expected shape {(self._natoms, self._natoms)}, got {value.shape}"
             )
         self._kirchhoff = value
         # Invalidate dependent values
         self._covariance = None
 
     @property
-    def covariance(self):
+    def covariance(self) -> np.ndarray:
         if self._covariance is None:
             self._covariance = np.linalg.pinv(
                 self.kirchhoff, hermitian=True, rcond=1e-6
@@ -131,18 +148,16 @@ class GNM:
         return self._covariance
 
     @covariance.setter
-    def covariance(self, value):
-        if value.shape != (len(self._coord), len(self._coord)):
+    def covariance(self, value: np.ndarray):
+        if value.shape != (self._natoms, self._natoms):
             raise IndexError(
-                f"Expected shape "
-                f"{(len(self._coord), len(self._coord))}, "
-                f"got {value.shape}"
+                f"Expected shape {(self._natoms, self._natoms)}, got {value.shape}"
             )
         self._covariance = value
         # Invalidate dependent values
         self._kirchhoff = None
 
-    def eigen(self):
+    def eigen(self) -> tuple[np.ndarray, np.ndarray]:
         """
         Compute the Eigenvalues and Eigenvectors of the
         *Kirchhoff* matrix.
@@ -157,7 +172,7 @@ class GNM:
         """
         return nma.eigen(self)
 
-    def frequencies(self):
+    def frequencies(self) -> np.ndarray:
         """
         Compute the oscillation frequencies of the model.
 
@@ -175,7 +190,12 @@ class GNM:
         """
         return nma.frequencies(self)
 
-    def mean_square_fluctuation(self, mode_subset=None, tem=None, tem_factors=K_B):
+    def mean_square_fluctuation(
+        self,
+        mode_subset: np.ndarray | None = None,
+        tem: float | None = None,
+        tem_factors: float = K_B,
+    ) -> np.ndarray:
         """
         Compute the *mean square fluctuation* for the atoms according to
         the GNM.
@@ -208,7 +228,12 @@ class GNM:
         """
         return nma.mean_square_fluctuation(self, mode_subset, tem, tem_factors)
 
-    def bfactor(self, mode_subset=None, tem=None, tem_factors=K_B):
+    def bfactor(
+        self,
+        mode_subset: np.ndarray | None = None,
+        tem: float | None = None,
+        tem_factors: float = K_B,
+    ) -> np.ndarray:
         """
         Computes the isotropic B-factors/temperature factors/
         Deby-Waller factors for atoms/coarse-grained nodes using
@@ -241,7 +266,13 @@ class GNM:
         """
         return nma.bfactor(self, mode_subset, tem, tem_factors)
 
-    def dcc(self, mode_subset=None, norm=True, tem=None, tem_factors=K_B):
+    def dcc(
+        self,
+        mode_subset: np.ndarray | None = None,
+        norm: bool = True,
+        tem: float | None = None,
+        tem_factors: float = K_B,
+    ) -> np.ndarray:
         r"""
         Computes the normalized *dynamic cross-correlation* between
         nodes of the GNM.

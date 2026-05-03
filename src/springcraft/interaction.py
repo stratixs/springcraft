@@ -3,15 +3,26 @@ This module contains functionality for computing interaction matrices,
 i.e. Kirchhoff and Hessian matrices.
 """
 
+from __future__ import annotations
+
 __name__ = "springcraft"
 __author__ = "Patrick Kunzmann, Jan Krumbach"
 __all__ = ["compute_kirchhoff", "compute_hessian"]
 
+from typing import TYPE_CHECKING
+
 import biotite.structure as struc
 import numpy as np
 
+if TYPE_CHECKING:
+    from springcraft.forcefield import ForceField
 
-def compute_kirchhoff(coord, force_field, use_cell_list=True):
+
+def compute_kirchhoff(
+    coord: np.ndarray,
+    force_field: ForceField,
+    use_cell_list: bool = True,
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Compute the *Kirchhoff* matrix for atoms with given coordinates and
     the chosen force field.
@@ -54,7 +65,11 @@ def compute_kirchhoff(coord, force_field, use_cell_list=True):
     return kirchhoff, pairs
 
 
-def compute_hessian(coord, force_field, use_cell_list=True):
+def compute_hessian(
+    coord: np.ndarray,
+    force_field: ForceField,
+    use_cell_list: bool = True,
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Compute the *Hessian* matrix for atoms with given coordinates and
     the chosen force field.
@@ -111,7 +126,11 @@ def compute_hessian(coord, force_field, use_cell_list=True):
     return hessian, pairs
 
 
-def _prepare_values_for_interaction_matrix(coord, force_field, use_cell_list):
+def _prepare_values_for_interaction_matrix(
+    coord: np.ndarray,
+    force_field: ForceField,
+    use_cell_list: bool,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Check input values and calculate common intermediate values for
     :func:`compute_kirchhoff()` and :func:`compute_hessian()`.
@@ -152,7 +171,7 @@ def _prepare_values_for_interaction_matrix(coord, force_field, use_cell_list):
         # Include all possible interactions, except an atom with itself
         adj_matrix = np.ones((len(coord), len(coord)), dtype=bool)
     elif use_cell_list:
-        cell_list = struc.CellList(
+        cell_list = struc.CellList(  # pyright: ignore[reportAttributeAccessIssue]
             coord,
             cutoff_distance,
         )
@@ -184,15 +203,18 @@ def _prepare_values_for_interaction_matrix(coord, force_field, use_cell_list):
         sq_dist = np.sum(disp * disp, axis=-1)
     else:
         # Displacements and squared distances were already calculated
-        disp = disp_matrix[pairs[:, 0], pairs[:, 1]]
-        sq_dist = sq_dist_matrix[pairs[:, 0], pairs[:, 1]]
+        disp = disp_matrix[pairs[:, 0], pairs[:, 1]]  # pyright: ignore[reportPossiblyUnboundVariable]
+        sq_dist = sq_dist_matrix[pairs[:, 0], pairs[:, 1]]  # pyright: ignore[reportPossiblyUnboundVariable]
 
     return pairs, disp, sq_dist
 
 
 def _patch_adjacency_matrix(
-    matrix, contact_shutdown, contact_pair_off, contact_pair_on
-):
+    matrix: np.ndarray,
+    contact_shutdown: np.ndarray | None,
+    contact_pair_off: np.ndarray | None,
+    contact_pair_on: np.ndarray | None,
+) -> None:
     """
     Apply contacts that are artificially switched off/on to an
     adjacency matrix.
