@@ -119,25 +119,6 @@ class ANM(ENM):
         # Invalidate dependent values
         self._hessian = None
 
-    def eigen(self) -> tuple[np.ndarray, np.ndarray]:
-        """
-        Compute the Eigenvalues and Eigenvectors of the
-        *Hessian* matrix.
-
-        The first six Eigenvalues/Eigenvectors correspond to
-        trivial modes (translations/rotations) and are usually omitted
-        in normal mode analysis.
-
-        Returns
-        -------
-        eig_values : ndarray, shape=(k,), dtype=float
-            Eigenvalues of the *Hessian* matrix in ascending order.
-        eig_vectors : ndarray, shape=(k,n), dtype=float
-            Eigenvectors of the *Hessian* matrix.
-            ``eig_values[i]`` corresponds to ``eig_vectors[i]``.
-        """
-        return nma.eigen(self)
-
     def normal_mode(
         self,
         index: int,
@@ -458,3 +439,27 @@ class ANM(ENM):
         # as the Hessian has 3 entries (x, y, z) for each atom
         mass_weights = np.repeat(mass_weights, 3)
         return np.outer(mass_weights, mass_weights)
+
+    def eigen(self) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Compute the Eigenvalues and Eigenvectors of the
+        *Hessian* matrix.
+
+        The first six Eigenvalues/Eigenvectors correspond to
+        trivial modes (translations/rotations) and are usually omitted
+        in normal mode analysis.
+
+        Returns
+        -------
+        eig_values : ndarray, shape=(k,), dtype=float
+            Eigenvalues of the *Hessian* matrix in ascending order.
+
+            This is not a copy: Create a copy before modifying this matrix.
+        eig_vectors : ndarray, shape=(k,n), dtype=float
+            Eigenvectors of the *Hessian* matrix.
+            ``eig_values[i]`` corresponds to ``eig_vectors[i]``.
+
+            This is not a copy: Create a copy before modifying this matrix.
+        """
+        # only called for proper docstring
+        return super().eigen()

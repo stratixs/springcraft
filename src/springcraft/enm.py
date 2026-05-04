@@ -67,6 +67,8 @@ class ENM(ABC):
 
     _coord: np.ndarray
     _covariance: np.ndarray | None
+    _eigen_values: np.ndarray | None
+    _eigen_vectors: np.ndarray | None
     _ff: ForceField
     _masses: np.ndarray | None
     _masses_weight_matrix: np.ndarray | None
@@ -110,6 +112,8 @@ class ENM(ABC):
         else:
             self._mass_weight_matrix = None
 
+        self._eigen_values = None
+        self._eigen_vectors = None
         self._covariance = None
 
     @property
@@ -119,9 +123,16 @@ class ENM(ABC):
     @property
     def covariance(self) -> np.ndarray:
         if self._covariance is None:
-            self._covariance = np.linalg.pinv(
-                self._interactions, hermitian=True, rcond=1e-6
-            )
+            # same algorithm as linalg.pinv
+            # but we want to store calculates eigenvalues in the process
+            s, vt = self.eigen()
+            u = vt.T
+
+            k = np.argmax(s > 1e-14)  # zero eigenvalues stay zero
+            s[k:] = 1 / s[k:]
+
+            self._covariance = u @ np.multiply(s[..., np.newaxis], vt)
+
         return self._covariance
 
     @covariance.setter
@@ -130,6 +141,32 @@ class ENM(ABC):
         if value.shape != (length, length):
             raise IndexError(f"Expected shape {(length, length)}, got {value.shape}")
         self._covariance = value
+
+    def eigen(self) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Compute or fetch the Eigenvalues and Eigenvectors of the
+        *interaction* matrix.
+
+        Returns
+        -------
+        eig_values : ndarray, shape=(k,), dtype=float
+            Eigenvalues of the matrix in ascending order.
+
+            This is not a copy: Create a copy before modifying this matrix.
+        eig_vectors : ndarray, shape=(k,n), dtype=float
+            Eigenvectors of the matrix.
+            ``eig_values[i]`` corresponds to ``eigenvectors[i]``.
+
+            This is not a copy: Create a copy before modifying this matrix.
+        """
+        if self._eigen_values is None or self._eigen_vectors is None:
+            self._eigen_values, self._eigen_vectors = np.linalg.eigh(self._interactions)
+
+            # numerical cleanup for zero eigenvalues
+            k = np.argmax(self._eigen_values > 1e-14)
+            self._eigen_values[:k] = 0
+
+        return self._eigen_values, self._eigen_vectors.T
 
     @property
     @abstractmethod

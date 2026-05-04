@@ -116,21 +116,6 @@ class GNM(ENM):
         # Invalidate dependent values
         self._kirchhoff = None
 
-    def eigen(self) -> tuple[np.ndarray, np.ndarray]:
-        """
-        Compute the Eigenvalues and Eigenvectors of the
-        *Kirchhoff* matrix.
-
-        Returns
-        -------
-        eig_values : ndarray, shape=(k,), dtype=float
-            Eigenvalues of the *Kirchhoff* matrix in ascending order.
-        eig_vectors : ndarray, shape=(k,n), dtype=float
-            Eigenvectors of the *Kirchhoff* matrix.
-            ``eig_values[i]`` corresponds to ``eigenvectors[i]``.
-        """
-        return nma.eigen(self)
-
     def frequencies(self) -> np.ndarray:
         """
         Compute the oscillation frequencies of the model.
@@ -307,3 +292,24 @@ class GNM(ENM):
     def _calc_mass_weight_matrix(masses: np.ndarray) -> np.ndarray:
         mass_weights = 1 / np.sqrt(masses)
         return np.outer(mass_weights, mass_weights)
+
+    @override
+    def eigen(self) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Compute the Eigenvalues and Eigenvectors of the
+        *Kirchhoff* matrix.
+
+        Returns
+        -------
+        eig_values : ndarray, shape=(k,), dtype=float
+            Eigenvalues of the *Kirchhoff* matrix in ascending order.
+
+            This is not a copy: Create a copy before modifying this matrix.
+        eig_vectors : ndarray, shape=(k,n), dtype=float
+            Eigenvectors of the *Kirchhoff* matrix.
+            ``eig_values[i]`` corresponds to ``eigenvectors[i]``.
+
+            This is not a copy: Create a copy before modifying this matrix.
+        """
+        # only called for proper docstring
+        return super().eigen()

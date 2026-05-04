@@ -20,6 +20,7 @@ __all__ = [
 from typing import Literal
 
 import numpy as np
+from typing_extensions import deprecated
 
 # -> Import ANM/GNM in functions to prevent circular import error
 
@@ -28,6 +29,7 @@ N_A = 6.02214076e23
 
 
 ## NMA functions for GNMs/ANMs
+@deprecated("Use class method instead.")
 def eigen(enm) -> tuple[np.ndarray, np.ndarray]:
     """
     Compute the Eigenvalues and Eigenvectors of the
@@ -48,21 +50,7 @@ def eigen(enm) -> tuple[np.ndarray, np.ndarray]:
         Eigenvectors of the *Kirchhoff*/*Hessian* matrix.
         ``eig_values[i]`` corresponds to ``eig_vectors[i]``.
     """
-    from .anm import ANM
-    from .gnm import GNM
-
-    # Assign Kirchhoff/Hessian
-    if isinstance(enm, GNM):
-        mech_matrix = enm.kirchhoff
-    elif isinstance(enm, ANM):
-        mech_matrix = enm.hessian
-    else:
-        raise ValueError("Instance of GNM/ANM class expected.")
-
-    # 'np.eigh' can be used since the Hessian/Kirchhoff matrix is symmetric
-    eig_values, eig_vectors = np.linalg.eigh(mech_matrix)
-
-    return eig_values, eig_vectors.T
+    return enm.eigen()
 
 
 def frequencies(enm) -> np.ndarray:
@@ -96,7 +84,7 @@ def frequencies(enm) -> np.ndarray:
     else:
         raise ValueError("Instance of GNM/ANM class expected.")
 
-    eig_values, _ = eigen(enm)
+    eig_values, _ = enm.eigen()
 
     # The very first / first six Eigenvalue(s) is/are usually close to 0;
     # but can have a negative sign.
@@ -149,7 +137,7 @@ def mean_square_fluctuation(
     if not isinstance(enm, (GNM, ANM)):
         raise ValueError("Instance of GNM/ANM class expected.")
 
-    eig_values, eig_vectors = eigen(enm)
+    eig_values, eig_vectors = enm.eigen()
 
     if isinstance(enm, ANM):
         # Eigenvectors: 3N -> N
@@ -423,7 +411,7 @@ def normal_mode(
     if not isinstance(anm, ANM):
         raise ValueError("Instance of ANM class expected.")
     else:
-        _, eig_vectors = eigen(anm)
+        _, eig_vectors = anm.eigen()
         # Extract vectors for given mode and reshape to (n,3) array
         mode_vectors = eig_vectors[index].reshape((-1, 3))
         # Rescale, so that the largest vector has the length 'amplitude'
