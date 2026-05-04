@@ -23,6 +23,7 @@ from os.path import dirname, join, realpath
 import biotite.sequence as seq
 import biotite.structure as struc
 import numpy as np
+from typing_extensions import override
 
 DATA_DIR = join(dirname(realpath(__file__)), "data")
 
@@ -103,6 +104,30 @@ class ForceField(metaclass=abc.ABCMeta):
         """
         pass
 
+    def update(self, atom_i, new_atom, skip_checks=False):
+        """
+        Allows a small pertubation to the `ForceField` if the `ForceField`
+        depends on the `Atom` configuration in the model.
+
+        Override when inheriting or leave passed when the `ForceField`
+        does not depend on the a actual molecule configuration.
+
+        Parameters
+        ----------
+        atom_i : int
+            The atom to modify
+        Atom : Atom
+            The changed atom
+        skip_checks : bool, optional
+            Whether to skip argument checks, by default False
+
+        Returns
+        -------
+        bool
+            Whether the `ForceField` was updated.
+        """
+        pass
+
     @property
     def cutoff_distance(self) -> float | None:
         return None
@@ -121,6 +146,10 @@ class ForceField(metaclass=abc.ABCMeta):
 
     @property
     def natoms(self) -> int | None:
+        return None
+
+    @property
+    def _force_constants(self) -> np.ndarray | None:
         return None
 
 
@@ -169,23 +198,25 @@ class PatchedForceField(ForceField):
         self._contact_pair_on = (
             np.asarray(contact_pair_on) if contact_pair_on is not None else None
         )
-        self._force_constants = (
+        self._force_constants_local = (
             np.asarray(force_constants) if force_constants is not None else None
         )
 
         # Input argument checks
-        _check_indices(force_field.natoms, self._contact_shutdown)
-        _check_indices(force_field.natoms, self._contact_pair_off)
-        _check_indices(force_field.natoms, self._contact_pair_on)
+        if force_field.natoms:
+            # TODO accept all indices if no bound is given?
+            _check_indices(force_field.natoms, self._contact_shutdown)
+            _check_indices(force_field.natoms, self._contact_pair_off)
+            _check_indices(force_field.natoms, self._contact_pair_on)
         if self._contact_pair_on is not None:
-            if self._force_constants is None:
+            if self._force_constants_local is None:
                 raise TypeError(
                     "Individual force constants must be given, "
                     "if contacts are turned on"
                 )
-            if len(self._force_constants) != len(self._contact_pair_on):
+            if len(self._force_constants_local) != len(self._contact_pair_on):
                 raise IndexError(
-                    f"{len(self._force_constants)} force constants were "
+                    f"{len(self._force_constants_local)} force constants were "
                     f"given for "
                     f"{len(self._contact_pair_on)} switched on contact_pairs"
                 )
@@ -206,8 +237,8 @@ class PatchedForceField(ForceField):
                 atom_i[cutoff_mask], atom_j[cutoff_mask], sq_distance[cutoff_mask]
             )
 
-        if self._contact_pair_on is not None:
-            patch_atom_i, patch_atom_j = self._contact_pair_on.T
+        if self.contact_pair_on is not None:
+            patch_atom_i, patch_atom_j = self.contact_pair_on.T
             # The minimum required size of the patch matrix is the
             # maximum of the indices + 1
             required_size = (
@@ -236,6 +267,9 @@ class PatchedForceField(ForceField):
         else:
             # No pairs are switched on -> no patching necessary
             return force_constants
+
+    def update(self, atom_i, new_atom, skip_checks=False):
+        return self._force_field.update(atom_i, new_atom, skip_checks)
 
     @property
     def cutoff_distance(self) -> float | None:
@@ -269,6 +303,18 @@ class PatchedForceField(ForceField):
             )
 
     @property
+    def _force_constants(self) -> np.ndarray | None:
+        if (
+            self._force_constants_local is None
+            or self._force_field._force_constants is None
+        ):
+            return self._force_constants_local
+        else:
+            return np.concatenate(
+                [self._force_constants_local, self._force_field._force_constants]
+            )
+
+    @property
     def natoms(self) -> int | None:
         return self._force_field.natoms
 
@@ -293,12 +339,14 @@ class InvariantForceField(ForceField):
             raise ValueError("Cutoff distance must be a float")
         self._cutoff_distance = cutoff_distance
 
+    @override
     def force_constant(
         self, atom_i: np.ndarray, atom_j: np.ndarray, sq_distance: np.ndarray
     ) -> np.ndarray:
         return np.ones(len(atom_i))
 
     @property
+    @override
     def cutoff_distance(self) -> float:
         return self._cutoff_distance
 
@@ -428,6 +476,8 @@ class TabulatedForceField(ForceField):
               Individual value for each distance bin and pair of amino
               acid types.
 
+        The quadratic layers of the matrizes must be symmetric.
+
     cutoff_distance : float or None or ndarray, shape=(k), dtype=float
         If no distance dependent values are given for `bonded`,
         `intra_chain` and `inter_chain`, this parameter accepts a float,
@@ -488,12 +538,13 @@ class TabulatedForceField(ForceField):
         self._inter_chain = _convert_to_matrix(inter_chain, n_bins)
 
         # Maps pos-specific indices to type-specific_indices
-        matrix_indices = np.array([AA_TO_INDEX[aa] for aa in atoms.res_name])  # pyright: ignore[reportOptionalIterable]
+        self._matrix_indices = np.array([AA_TO_INDEX[aa] for aa in atoms.res_name])  # pyright: ignore[reportOptionalIterable]
 
         # Find peptide bonds
-        continuous_res_id = np.diff(atoms.res_id) == 1  # pyright: ignore[reportArgumentType]
-        continuous_chain_id = atoms.chain_id[:-1] == atoms.chain_id[1:]  # pyright: ignore[reportOptionalSubscript]
-        peptide_bond_i = np.where(continuous_res_id & continuous_chain_id)[0]
+        continuous_res_id = np.diff(atoms.res_id) == 1
+        continuous_chain_id = atoms.chain_id[:-1] == atoms.chain_id[1:]
+        self._is_peptide_bond = continuous_res_id & continuous_chain_id
+        peptide_bond_i = np.where(self._is_peptide_bond)[0]
 
         ### Fill interaction matrix
         ## Handle non-bonded interactions
@@ -504,15 +555,24 @@ class TabulatedForceField(ForceField):
             np.tile(np.arange(self._natoms), self._natoms),
         )
         # Convert indices to type-specific_indices
-        type_indices = (matrix_indices[pos_indices[0]], matrix_indices[pos_indices[1]])
+        type_indices = (
+            self._matrix_indices[pos_indices[0]],
+            self._matrix_indices[pos_indices[1]],
+        )
         intra_interactions = self._intra_chain[type_indices[0], type_indices[1]]
         inter_interactions = self._inter_chain[type_indices[0], type_indices[1]]
         # Distinguish between intra- and inter-chain interactions
+        is_intra_interaction = (
+            atoms.chain_id[pos_indices[0]] == atoms.chain_id[pos_indices[1]]
+        )
         interactions = np.where(
-            atoms.chain_id[pos_indices[0]] == atoms.chain_id[pos_indices[1]],  # pyright: ignore[reportOptionalSubscript]
+            is_intra_interaction,
             intra_interactions.T,
             inter_interactions.T,
         ).T
+        self._is_intra_interaction = is_intra_interaction.reshape(
+            (self._natoms, self._natoms)
+        )
         # Initialize pos-specific interaction matrix
         # For simplicity bonded interactions are also handled as
         # non-bonded interactions at this point,
@@ -524,7 +584,10 @@ class TabulatedForceField(ForceField):
         ## Handle bonded interactions
         # Convert pos-specific indices to type-specific indices
         # -> general case
-        indices = (matrix_indices[peptide_bond_i], matrix_indices[peptide_bond_i + 1])
+        indices = (
+            self._matrix_indices[peptide_bond_i],
+            self._matrix_indices[peptide_bond_i + 1],
+        )
         constants = self._bonded[indices]
 
         # Overwrite previous values
@@ -556,6 +619,69 @@ class TabulatedForceField(ForceField):
                     )
                 else:
                     raise
+
+    def update(self, atom_i, new_atom, skip_checks=False):
+        """
+        Allows a small pertubation to the `ForceField` if the `ForceField`
+        depends on the `Atom` configuration in the model. Results in a
+        fast modification as not the whole `ForceField` gets recalculated
+        but only the affected interactions. Only changes the amino acid
+        type changes.
+
+        Parameters
+        ----------
+        atom_i : int
+            The atom to modify
+        Atom : Atom
+            The changed atom
+
+        Returns
+        -------
+        bool
+            Whether the `ForceField` was updated.
+        """
+        if not skip_checks:
+            if atom_i < 0 or atom_i >= self._natoms:
+                raise IndexError(
+                    f"Atom i {atom_i} out of bounds"
+                    f"for a structure of length {self._natoms}"
+                )
+            if not isinstance(new_atom, struc.Atom):
+                raise TypeError(f"New_atom needs to an Atom but was {type(new_atom)}")
+
+        matrix_index = AA_TO_INDEX[new_atom.res_name]
+        if self._matrix_indices[atom_i] == matrix_index:
+            return False
+        self._matrix_indices[atom_i] = matrix_index
+
+        # Update non-bonded interactions with atom_i
+        # overriding bonded interactions as they are updated later
+        atom_interactions = np.where(
+            self._is_intra_interaction[atom_i, :, np.newaxis],
+            self._intra_chain[self._matrix_indices[atom_i], self._matrix_indices],
+            self._inter_chain[self._matrix_indices[atom_i], self._matrix_indices],
+        )
+        self._interaction_matrix[atom_i, :] = atom_interactions
+        self._interaction_matrix[:, atom_i] = atom_interactions
+
+        # Override with bonded interactions, if they exist
+        if atom_i > 0 and self._is_peptide_bond[atom_i - 1]:
+            constant = self._bonded[
+                self._matrix_indices[atom_i - 1], self._matrix_indices[atom_i]
+            ]
+            self._interaction_matrix[atom_i - 1, atom_i] = constant
+            self._interaction_matrix[atom_i, atom_i - 1] = constant
+        if atom_i < self._natoms - 1 and self._is_peptide_bond[atom_i]:
+            constant = self._bonded[
+                self._matrix_indices[atom_i], self._matrix_indices[atom_i + 1]
+            ]
+            self._interaction_matrix[atom_i, atom_i + 1] = constant
+            self._interaction_matrix[atom_i + 1, atom_i] = constant
+
+        # Interaction of atom_i with itself
+        self._interaction_matrix[atom_i, atom_i, :] = 0
+
+        return True
 
     @property
     def cutoff_distance(self) -> float | None:
