@@ -13,12 +13,14 @@ Network models
 
 .. autoclass:: GNM
    :members:
+   :inherited-members:
 
 |
 
 .. autoclass:: ANM
    :members:
-   
+   :inherited-members:
+
 |
 
 

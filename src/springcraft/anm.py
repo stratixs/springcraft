@@ -10,19 +10,17 @@ __all__ = ["ANM"]
 from typing import Literal
 
 import biotite.structure as struc
-import biotite.structure.info as strucinfo
 import numpy as np
+from typing_extensions import override
 
+from springcraft.enm import ENM, K_B
 from springcraft.forcefield import ForceField
 
 from . import nma
 from .interaction import compute_hessian
 
-K_B = 1.380649e-23
-N_A = 6.02214076e23
 
-
-class ANM:
+class ANM(ENM):
     """
     This class represents an *Anisotropic Network Model*.
 
@@ -32,8 +30,8 @@ class ANM:
         The atoms or their coordinates that are part of the model.
         It usually contains only CA atoms.
     force_field : ForceField, natoms=n
-        The :class:`ForceField` that defines the force constants between
-        the given `atoms`.
+        The :class:`ForceField` that defines the cutoff distance and
+        pairwise interaction strengths between the given `atoms`.
     masses : bool or ndarray, shape=(n,), dtype=float, optional
         If an array is given, the Hessian is weighted with the inverse
         square root of the given masses.
@@ -56,22 +54,25 @@ class ANM:
         Each dimension is partitioned in the form
         ``[x1, y1, z1, ... xn, yn, zn]``.
         This is not a copy: Create a copy before modifying this matrix.
-    covariance : ndarray, shape=(n*3,n*3), dtype=float
+    covariance : ndarray, shape=(n,n), dtype=float
         The covariance matrix for this model, i.e. the inverted
-        *Hessian*.
+        *Hessian* matrix. The returned covariance matrix is not scaled
+        correctly and does not have the correct unit. To obtain the true
+        covariance matrix, you can calculate
+
+        .. math::
+
+            \\text{Cov}_\\text{true} = k_B T \\text{Cov}
+
+        with Boltzman constant :math:`k_B` and absolut temperature
+        :math:`[T] = K` in Kelvin.
+
         This is not a copy: Create a copy before modifying this matrix.
     masses : None or ndarray, shape=(n,), dtype=float
         The mass for each atom, `None` if no mass weighting is applied.
     """
 
-    _coord: np.ndarray
-    _covariance: np.ndarray | None
-    _ff: ForceField
-    _kirchhoff: np.ndarray | None
-    _masses: np.ndarray | None
-    _masses_weight_matrix: np.ndarray | None
-    _natoms: int
-    _use_cell_list: bool
+    _hessian: np.ndarray | None
 
     def __init__(
         self,
@@ -80,46 +81,9 @@ class ANM:
         masses: bool | np.ndarray | None = None,
         use_cell_list: bool = True,
     ):
-        self._coord = np.asarray(struc.coord(atoms))
-        self._natoms = len(self._coord)
-        self._ff = force_field
-        self._use_cell_list = use_cell_list
-
-        if masses is None or masses is False:
-            self._masses = None
-        elif masses is True:
-            if not isinstance(atoms, struc.AtomArray):
-                raise TypeError(
-                    "An AtomArray is required to automatically infer masses"
-                )
-            self._masses = np.array(
-                [
-                    strucinfo.mass(res_name, is_residue=True)
-                    for res_name in atoms.res_name  # pyright: ignore[reportOptionalIterable]
-                ]
-            )
-        else:
-            if len(masses) != self._natoms:
-                raise IndexError(f"{len(masses)} masses for {self._natoms} atoms given")
-            if np.any(masses == 0):
-                raise ValueError("Masses must not be 0")
-            self._masses = np.array(masses, dtype=float)
-
-        if self._masses is not None:
-            mass_weights = 1 / np.sqrt(self._masses)
-            # 3 repetitions,
-            # as the Hessian has 3 entries (x, y, z) for each atom
-            mass_weights = np.repeat(mass_weights, 3)
-            self._mass_weight_matrix = np.outer(mass_weights, mass_weights)
-        else:
-            self._mass_weight_matrix = None
+        super().__init__(atoms, force_field, masses, use_cell_list)
 
         self._hessian = None
-        self._covariance = None
-
-    @property
-    def masses(self) -> np.ndarray | None:
-        return self._masses
 
     @property
     def hessian(self) -> np.ndarray:
@@ -148,21 +112,10 @@ class ANM:
         # Invalidate dependent values
         self._covariance = None
 
-    @property
-    def covariance(self) -> np.ndarray:
-        if self._covariance is None:
-            self._covariance = np.linalg.pinv(self.hessian, hermitian=True, rcond=1e-6)
-        return self._covariance
-
-    @covariance.setter
+    @ENM.covariance.setter
+    @override
     def covariance(self, value: np.ndarray):
-        if value.shape != (self._natoms * 3, self._natoms * 3):
-            raise IndexError(
-                f"Expected shape "
-                f"{(self._natoms * 3, self._natoms * 3)}, "
-                f"got {value.shape}"
-            )
-        self._covariance = value
+        super().covariance = value
         # Invalidate dependent values
         self._hessian = None
 
@@ -486,3 +439,22 @@ class ANM:
         prs_mat = nma.prs(self, norm)
         eff, sens = nma.effector_sensor(prs_mat)
         return prs_mat, eff, sens
+
+    @property
+    @override
+    def _interactions(self) -> np.ndarray:
+        return self.hessian
+
+    @property
+    @override
+    def _dof_per_node(self) -> int:
+        return 1
+
+    @staticmethod
+    @override
+    def _calc_mass_weight_matrix(masses: np.ndarray) -> np.ndarray:
+        mass_weights = 1 / np.sqrt(masses)
+        # 3 repetitions,
+        # as the Hessian has 3 entries (x, y, z) for each atom
+        mass_weights = np.repeat(mass_weights, 3)
+        return np.outer(mass_weights, mass_weights)

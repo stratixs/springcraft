@@ -8,19 +8,17 @@ __author__ = "Patrick Kunzmann, Faisal Islam"
 __all__ = ["GNM"]
 
 import biotite.structure as struc
-import biotite.structure.info as strucinfo
 import numpy as np
+from typing_extensions import override
 
+from springcraft.enm import ENM, K_B
 from springcraft.forcefield import ForceField
 
 from . import nma
 from .interaction import compute_kirchhoff
 
-K_B = 1.380649e-23
-N_A = 6.02214076e23
 
-
-class GNM:
+class GNM(ENM):
     """
     This class represents a *Gaussian Network Model*.
 
@@ -30,8 +28,8 @@ class GNM:
         The atoms or their coordinates that are part of the model.
         It usually contains only CA atoms.
     force_field : ForceField, natoms=n
-        The :class:`ForceField` that defines the force constants between
-        the given `atoms`.
+        The :class:`ForceField` that defines the cutoff distance and
+        pairwise interaction strengths between the given `atoms`.
     masses : bool or ndarray, shape=(n,), dtype=float, optional
         If an array is given, the Kirchhoff matrix is weighted with the
         inverse square root of the given masses.
@@ -50,24 +48,30 @@ class GNM:
     Attributes
     ----------
     kirchhoff : ndarray, shape=(n,n), dtype=float
-        The *Kirchhoff* matrix for this model.
+        The *Kirchhoff* matrix for this model. Adjacency matrix of `atoms`
+        that are within cutoff distance of another. The weights of this
+        adjacency matrix are the force constants of the abstract springs
+        between the atoms in the ENM.
         This is not a copy: Create a copy before modifying this matrix.
-    covariance : ndarray, shape=(n*3,n*3), dtype=float
+    covariance : ndarray, shape=(n,n), dtype=float
         The covariance matrix for this model, i.e. the inverted
-        *Kirchhofff* matrix.
+        *Kirchhofff* matrix. The returned covariance matrix is not scaled
+        correctly and does not have the correct unit. To obtain the true
+        covariance matrix, you can calculate
+
+        .. math::
+
+            \\text{Cov}_\\text{true} = k_B T \\text{Cov}
+
+        with Boltzman constant :math:`k_B` and absolut temperature
+        :math:`[T] = K` in Kelvin.
+
         This is not a copy: Create a copy before modifying this matrix.
     masses : None or ndarray, shape=(n,), dtype=float
         The mass for each atom, `None` if no mass weighting is applied.
     """
 
-    _coord: np.ndarray
-    _covariance: np.ndarray | None
-    _ff: ForceField
     _kirchhoff: np.ndarray | None
-    _masses: np.ndarray | None
-    _masses_weight_matrix: np.ndarray | None
-    _natoms: int
-    _use_cell_list: bool
 
     def __init__(
         self,
@@ -76,43 +80,9 @@ class GNM:
         masses=None,
         use_cell_list=True,
     ):
-        self._coord = np.asarray(struc.coord(atoms))
-        self._natoms = len(self._coord)
-        self._ff = force_field
-        self._use_cell_list = use_cell_list
-
-        if masses is None or masses is False:
-            self._masses = None
-        elif masses is True:
-            if not isinstance(atoms, struc.AtomArray):
-                raise TypeError(
-                    "An AtomArray is required to automatically infer masses"
-                )
-            self._masses = np.array(
-                [
-                    strucinfo.mass(res_name, is_residue=True)
-                    for res_name in atoms.res_name  # pyright: ignore[reportOptionalIterable]
-                ]
-            )
-        else:
-            if len(masses) != self._natoms:
-                raise IndexError(f"{len(masses)} masses for {self._natoms} atoms given")
-            if np.any(masses == 0):
-                raise ValueError("Masses must not be 0")
-            self._masses = np.array(masses, dtype=float)
-
-        if self._masses is not None:
-            mass_weights = 1 / np.sqrt(self._masses)
-            self._mass_weight_matrix = np.outer(mass_weights, mass_weights)
-        else:
-            self._mass_weight_matrix = None
+        super().__init__(atoms, force_field, masses, use_cell_list)
 
         self._kirchhoff = None
-        self._covariance = None
-
-    @property
-    def masses(self) -> np.ndarray | None:
-        return self._masses
 
     @property
     def kirchhoff(self) -> np.ndarray:
@@ -139,21 +109,10 @@ class GNM:
         # Invalidate dependent values
         self._covariance = None
 
-    @property
-    def covariance(self) -> np.ndarray:
-        if self._covariance is None:
-            self._covariance = np.linalg.pinv(
-                self.kirchhoff, hermitian=True, rcond=1e-6
-            )
-        return self._covariance
-
-    @covariance.setter
+    @ENM.covariance.setter
+    @override
     def covariance(self, value: np.ndarray):
-        if value.shape != (self._natoms, self._natoms):
-            raise IndexError(
-                f"Expected shape {(self._natoms, self._natoms)}, got {value.shape}"
-            )
-        self._covariance = value
+        super().covariance = value
         # Invalidate dependent values
         self._kirchhoff = None
 
@@ -332,3 +291,19 @@ class GNM:
             nDCC_{ij} = \frac{DCC_{ij}}{[DCC_{ii} DCC_{jj}]^{1/2}}
         """
         return nma.dcc(self, mode_subset, norm, tem, tem_factors)
+
+    @property
+    @override
+    def _interactions(self) -> np.ndarray:
+        return self.kirchhoff
+
+    @property
+    @override
+    def _dof_per_node(self) -> int:
+        return 1
+
+    @staticmethod
+    @override
+    def _calc_mass_weight_matrix(masses: np.ndarray) -> np.ndarray:
+        mass_weights = 1 / np.sqrt(masses)
+        return np.outer(mass_weights, mass_weights)
