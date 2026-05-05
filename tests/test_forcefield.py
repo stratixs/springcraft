@@ -7,7 +7,6 @@ import numpy as np
 import pytest
 
 import springcraft
-from springcraft.forcefield import InvariantForceField
 
 from .util import data_dir
 
@@ -48,7 +47,7 @@ def test_patched_force_field_shutdown(atoms):
     shutdown_indices_1 = shutdown_indices[:N_CONTACTS_1]
     shutdown_indices_2 = shutdown_indices[N_CONTACTS_1:]
 
-    ref_ff = InvariantForceField(7.0)
+    ref_ff = springcraft.TabulatedForceField.e_anm(atoms)
     ref_kirchhoff_1, _ = springcraft.compute_kirchhoff(atoms.coord, ref_ff)
     # Manual shutdown of contacts after Kirchhoff calculation
     ref_kirchhoff_1[shutdown_indices_1, :] = 0
@@ -57,6 +56,11 @@ def test_patched_force_field_shutdown(atoms):
     ref_kirchhoff_2 = ref_kirchhoff_1.copy()
     ref_kirchhoff_2[shutdown_indices_2, :] = 0
     ref_kirchhoff_2[:, shutdown_indices_2] = 0
+
+    with pytest.raises(IndexError, match="out of bounds for a structure of length"):
+        springcraft.PatchedForceField(ref_ff, contact_shutdown=np.array(-1))
+    with pytest.raises(IndexError, match="out of bounds for a structure of length"):
+        springcraft.PatchedForceField(ref_ff, contact_shutdown=np.array(40))
 
     test_ff_1 = springcraft.PatchedForceField(
         ref_ff, contact_shutdown=shutdown_indices_1
@@ -90,7 +94,7 @@ def test_patched_force_field_pairs_off(atoms):
     off_indices_1 = off_indices[:N_CONTACTS_1]
     off_indices_2 = off_indices[N_CONTACTS_1:]
 
-    ref_ff = InvariantForceField(7.0)
+    ref_ff = springcraft.TabulatedForceField.e_anm(atoms)
     ref_kirchhoff_1, _ = springcraft.compute_kirchhoff(atoms.coord, ref_ff)
     # Manual shutdown of contacts after Kirchhoff calculation
     atom_i, atom_j = off_indices_1.T
@@ -101,6 +105,11 @@ def test_patched_force_field_pairs_off(atoms):
     ref_kirchhoff_2 = ref_kirchhoff_1.copy()
     ref_kirchhoff_2[atom_i, atom_j] = 0
     ref_kirchhoff_2[atom_j, atom_i] = 0
+
+    with pytest.raises(IndexError, match="out of bounds for a structure of length"):
+        springcraft.PatchedForceField(ref_ff, contact_shutdown=np.array(-1))
+    with pytest.raises(IndexError, match="out of bounds for a structure of length"):
+        springcraft.PatchedForceField(ref_ff, contact_shutdown=np.array(40))
 
     test_ff_1 = springcraft.PatchedForceField(ref_ff, contact_pair_off=off_indices_1)
     test_kirchhoff_1, _ = springcraft.compute_kirchhoff(atoms.coord, test_ff_1)
@@ -133,7 +142,7 @@ def test_patched_force_field_pairs_on(atoms):
     force_constants_1 = force_constants[:N_CONTACTS_1]
     force_constants_2 = force_constants[N_CONTACTS_1:]
 
-    ref_ff = InvariantForceField(7.0)
+    ref_ff = springcraft.TabulatedForceField.e_anm(atoms)
     ref_kirchhoff_1, _ = springcraft.compute_kirchhoff(atoms.coord, ref_ff)
     # Manual change of contacts after Kirchhoff calculation
     atom_i, atom_j = on_indices_1.T
@@ -144,6 +153,17 @@ def test_patched_force_field_pairs_on(atoms):
     ref_kirchhoff_2 = ref_kirchhoff_1.copy()
     ref_kirchhoff_2[atom_i, atom_j] = -force_constants_2
     ref_kirchhoff_2[atom_j, atom_i] = -force_constants_2
+
+    with pytest.raises(IndexError, match="out of bounds for a structure of length"):
+        springcraft.PatchedForceField(ref_ff, contact_shutdown=np.array(-1))
+    with pytest.raises(IndexError, match="out of bounds for a structure of length"):
+        springcraft.PatchedForceField(ref_ff, contact_shutdown=np.array(40))
+    with pytest.raises(TypeError, match="Individual force constants must be given"):
+        springcraft.PatchedForceField(ref_ff, contact_pair_on=on_indices)
+    with pytest.raises(IndexError, match="force constants were given for"):
+        springcraft.PatchedForceField(
+            ref_ff, contact_pair_on=on_indices, force_constants=force_constants_1
+        )
 
     test_ff_1 = springcraft.PatchedForceField(
         ref_ff, contact_pair_on=on_indices_1, force_constants=force_constants_1
@@ -178,11 +198,24 @@ def test_patched_force_field_propagates_update(atoms):
 
     ff = springcraft.TabulatedForceField(atoms, bonded, intra, inter, None)
     patched_ff = springcraft.PatchedForceField(ff)
-    force_const_before = patched_ff.force_constant([0], [1], [1])
+    force_before = patched_ff.force_constant(np.array(0), np.array(1), np.array(1))
     atoms.res_name[1] = "ALA"
     assert patched_ff.update(1, atoms[1])
-    force_const_after = patched_ff.force_constant([0], [1], [1])
-    assert force_const_before != force_const_after
+    force_after = patched_ff.force_constant(np.array(0), np.array(1), np.array(1))
+    assert force_before != force_after
+
+
+def test_invariant_force_field(atoms):
+    "Tests whether the basic InvariantForceField works."
+    N_CONTACTS = 5
+    CUTOFF_DIST = 7.0
+
+    ff = springcraft.InvariantForceField(CUTOFF_DIST)
+    force_constants = ff.force_constant(
+        np.arange(N_CONTACTS), np.arange(N_CONTACTS), np.arange(N_CONTACTS)
+    )
+    assert np.all(force_constants == np.ones(N_CONTACTS))
+    assert ff.cutoff_distance == CUTOFF_DIST
 
 
 def test_tabulated_forcefield_homogeneous(atoms):
@@ -521,7 +554,6 @@ def test_compare_with_bio3d(atoms_singlechain, ff_name):
     The following ENM forcefields are compared:
     Hinsen-Calpha, sdENM and pfENM.
     """
-    atoms_singlechain
     if ff_name == "Hinsen":
         ff = springcraft.HinsenForceField()
         ff_bio3d_str = "calpha"

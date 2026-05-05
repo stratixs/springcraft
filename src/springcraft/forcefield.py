@@ -203,11 +203,10 @@ class PatchedForceField(ForceField):
         )
 
         # Input argument checks
-        if force_field.natoms:
-            # TODO accept all indices if no bound is given?
-            _check_indices(force_field.natoms, self._contact_shutdown)
-            _check_indices(force_field.natoms, self._contact_pair_off)
-            _check_indices(force_field.natoms, self._contact_pair_on)
+        # TODO accept all indices if no bound is given?
+        _check_indices(force_field.natoms, self._contact_shutdown)
+        _check_indices(force_field.natoms, self._contact_pair_off)
+        _check_indices(force_field.natoms, self._contact_pair_on)
         if self._contact_pair_on is not None:
             if self._force_constants_local is None:
                 raise TypeError(
@@ -1108,12 +1107,10 @@ def _load_matrix(fname: str) -> np.ndarray:
 
 
 def _check_indices(length: int | None, indices: np.ndarray | None) -> None:
-    if indices is None and length is None:
-        return
     if indices is None or length is None:
-        raise ValueError("Either bound or indices are missing.")
+        return
     flat_indices = indices.flatten()
-    out_of_bounds_i = np.where(flat_indices >= length)[0]
+    out_of_bounds_i = np.where((flat_indices < 0) | (flat_indices >= length))[0]
     if len(out_of_bounds_i) > 0:
         raise IndexError(
             f"Index {flat_indices[out_of_bounds_i[0]]} is out of bounds "
