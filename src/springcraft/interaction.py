@@ -5,6 +5,8 @@ i.e. Kirchhoff and Hessian matrices.
 
 from __future__ import annotations
 
+from typing_extensions import deprecated
+
 __name__ = "springcraft"
 __author__ = "Patrick Kunzmann, Jan Krumbach"
 __all__ = ["compute_kirchhoff", "compute_hessian"]
@@ -18,6 +20,7 @@ if TYPE_CHECKING:
     from springcraft.forcefield import ForceField
 
 
+@deprecated("Use GNM property instead.")
 def compute_kirchhoff(
     coord: np.ndarray,
     force_field: ForceField,
@@ -65,6 +68,7 @@ def compute_kirchhoff(
     return kirchhoff, pairs
 
 
+@deprecated("Use ANM property instead.")
 def compute_hessian(
     coord: np.ndarray,
     force_field: ForceField,

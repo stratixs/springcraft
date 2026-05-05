@@ -48,7 +48,7 @@ def test_patched_force_field_shutdown(atoms):
     shutdown_indices_2 = shutdown_indices[N_CONTACTS_1:]
 
     ref_ff = springcraft.TabulatedForceField.e_anm(atoms)
-    ref_kirchhoff_1, _ = springcraft.compute_kirchhoff(atoms.coord, ref_ff)
+    ref_kirchhoff_1 = springcraft.GNM(atoms, ref_ff).kirchhoff
     # Manual shutdown of contacts after Kirchhoff calculation
     ref_kirchhoff_1[shutdown_indices_1, :] = 0
     ref_kirchhoff_1[:, shutdown_indices_1] = 0
@@ -65,13 +65,13 @@ def test_patched_force_field_shutdown(atoms):
     test_ff_1 = springcraft.PatchedForceField(
         ref_ff, contact_shutdown=shutdown_indices_1
     )
-    test_kirchhoff_1, _ = springcraft.compute_kirchhoff(atoms.coord, test_ff_1)
+    test_kirchhoff_1 = springcraft.GNM(atoms, test_ff_1).kirchhoff
 
     # chained patched FF should combine shutdown indices
     test_ff_2 = springcraft.PatchedForceField(
         test_ff_1, contact_shutdown=shutdown_indices_2
     )
-    test_kirchhoff_2, _ = springcraft.compute_kirchhoff(atoms.coord, test_ff_2)
+    test_kirchhoff_2 = springcraft.GNM(atoms, test_ff_2).kirchhoff
 
     # Main diagonal is not easily adjusted
     # -> simply set main diagonal of ref and test matrix to 0
@@ -95,7 +95,7 @@ def test_patched_force_field_pairs_off(atoms):
     off_indices_2 = off_indices[N_CONTACTS_1:]
 
     ref_ff = springcraft.TabulatedForceField.e_anm(atoms)
-    ref_kirchhoff_1, _ = springcraft.compute_kirchhoff(atoms.coord, ref_ff)
+    ref_kirchhoff_1 = springcraft.GNM(atoms, ref_ff).kirchhoff
     # Manual shutdown of contacts after Kirchhoff calculation
     atom_i, atom_j = off_indices_1.T
     ref_kirchhoff_1[atom_i, atom_j] = 0
@@ -112,11 +112,11 @@ def test_patched_force_field_pairs_off(atoms):
         springcraft.PatchedForceField(ref_ff, contact_shutdown=np.array(40))
 
     test_ff_1 = springcraft.PatchedForceField(ref_ff, contact_pair_off=off_indices_1)
-    test_kirchhoff_1, _ = springcraft.compute_kirchhoff(atoms.coord, test_ff_1)
+    test_kirchhoff_1 = springcraft.GNM(atoms, test_ff_1).kirchhoff
 
     # chained patched FF should combine off indices
     test_ff_2 = springcraft.PatchedForceField(test_ff_1, contact_pair_off=off_indices_2)
-    test_kirchhoff_2, _ = springcraft.compute_kirchhoff(atoms.coord, test_ff_2)
+    test_kirchhoff_2 = springcraft.GNM(atoms, test_ff_2).kirchhoff
 
     # Main diagonal is not easily adjusted
     # -> simply set main diagonal of ref and test matrix to 0
@@ -143,7 +143,7 @@ def test_patched_force_field_pairs_on(atoms):
     force_constants_2 = force_constants[N_CONTACTS_1:]
 
     ref_ff = springcraft.TabulatedForceField.e_anm(atoms)
-    ref_kirchhoff_1, _ = springcraft.compute_kirchhoff(atoms.coord, ref_ff)
+    ref_kirchhoff_1 = springcraft.GNM(atoms, ref_ff).kirchhoff
     # Manual change of contacts after Kirchhoff calculation
     atom_i, atom_j = on_indices_1.T
     ref_kirchhoff_1[atom_i, atom_j] = -force_constants_1
@@ -168,13 +168,13 @@ def test_patched_force_field_pairs_on(atoms):
     test_ff_1 = springcraft.PatchedForceField(
         ref_ff, contact_pair_on=on_indices_1, force_constants=force_constants_1
     )
-    test_kirchhoff_1, _ = springcraft.compute_kirchhoff(atoms.coord, test_ff_1)
+    test_kirchhoff_1 = springcraft.GNM(atoms, test_ff_1).kirchhoff
 
     # chained patched FF should combine on indices
     test_ff_2 = springcraft.PatchedForceField(
         test_ff_1, contact_pair_on=on_indices_2, force_constants=force_constants_2
     )
-    test_kirchhoff_2, _ = springcraft.compute_kirchhoff(atoms.coord, test_ff_2)
+    test_kirchhoff_2 = springcraft.GNM(atoms, test_ff_2).kirchhoff
 
     # Main diagonal is not easily adjusted
     # -> simply set main diagonal of ref and test matrix to 0
@@ -360,7 +360,7 @@ def test_tabulated_forcefield_cutoff(atoms, cutoff_distance):
     that simply represents adjacency.
     """
     ff = springcraft.TabulatedForceField(atoms, 1, 1, 1, cutoff_distance)
-    kirchhoff, _ = springcraft.compute_kirchhoff(atoms.coord, ff)
+    kirchhoff = springcraft.GNM(atoms, ff).kirchhoff
     ref_adj_matrix = -kirchhoff
     np.fill_diagonal(ref_adj_matrix, 0)
     assert np.isin(ref_adj_matrix.flatten(), [0, 1]).all()
@@ -506,7 +506,7 @@ def test_parameterfree_forcefield():
     ref_kirchhoff = -1 / dist_matrix**2
 
     ff = springcraft.ParameterFreeForceField()
-    test_kirchhoff, _ = springcraft.compute_kirchhoff(coord, ff)
+    test_kirchhoff = springcraft.GNM(coord, ff).kirchhoff
 
     # Ignore main diagonal -> Set main diagonal of both matrices to 0
     np.fill_diagonal(ref_kirchhoff, 0)
@@ -532,7 +532,7 @@ def test_compare_with_biophysconnector_heterogenous(atoms_singlechain, ff_name):
         ff = springcraft.TabulatedForceField.e_anm_ke(atoms_singlechain)
         ref_file = "biophysconnector_anm_eanm_ke_hessian_1l2y.csv"
 
-    test_hessian, _ = springcraft.compute_hessian(atoms_singlechain.coord, ff)
+    test_hessian = springcraft.ANM(atoms_singlechain.coord, ff).hessian
 
     # Load .csv.gz file data from BiophysConnectoR
     ref_hessian = np.genfromtxt(
@@ -569,7 +569,7 @@ def test_compare_with_bio3d(atoms_singlechain, ff_name):
         delimiter=",",
     )
 
-    test_hessian, _ = springcraft.compute_hessian(atoms_singlechain.coord, ff)
+    test_hessian = springcraft.ANM(atoms_singlechain.coord, ff).hessian
 
     # Higher deviation for Hinsen-FF
     if ff_name == "Hinsen":
