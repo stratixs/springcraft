@@ -73,6 +73,7 @@ class ENM(ABC):
     _eigen_values_zero: int
     _eigen_vectors: np.ndarray | None
     _ff: ForceField
+    _free_energy_contrib: float | None
     _masses: np.ndarray | None
     _masses_weight_matrix: np.ndarray | None
     _natoms: int
@@ -116,10 +117,11 @@ class ENM(ABC):
             self._mass_weight_matrix = None
 
         self._adjacency = None
+        self._covariance = None
         self._eigen_values = None
         self._eigen_values_zero = 0
         self._eigen_vectors = None
-        self._covariance = None
+        self._free_energy_contrib = None
 
     @property
     def masses(self) -> np.ndarray | None:
@@ -140,10 +142,19 @@ class ENM(ABC):
 
     @covariance.setter
     def covariance(self, value: np.ndarray):
-        length = self._natoms * self._dof_per_node
+        length = self._natoms * self.dof_per_node
         if value.shape != (length, length):
             raise IndexError(f"Expected shape {(length, length)}, got {value.shape}")
         self._covariance = value
+        self._eigen_values = None
+        self._eigen_values_zero = 0
+        self._eigen_vectors = None
+        self._free_energy_contrib = None  # unscaled
+
+    @property
+    @abstractmethod
+    def dof_per_node(self) -> int:
+        pass
 
     def modify_contacts(
         self,
@@ -520,6 +531,26 @@ class ENM(ABC):
         """
         return nma.dcc(self, mode_subset, norm, tem, tem_factors)
 
+    def free_energy_contribution(self, tem=None, tem_factors=K_B):
+        """
+        Calculates the contribution of the protein configuration to the
+        Helmholtz free energy.
+
+        According to
+        Hamacher K. Free energy of contact formation in proteins: efficient computation in the elastic network approximation. Phys Rev E Stat Nonlin Soft Matter Phys. 2011 Jul;84(1 Pt 2):016703. doi: 10.1103/PhysRevE.84.016703. Epub 2011 Jul 7. PMID: 21867339.
+        """
+        if self._free_energy_contrib is None:
+            self._free_energy_contrib = nma.free_energy_contribution(self)
+
+        tem_scaling = 1
+        offset = 0
+        if tem is not None:
+            tem_scaling = tem * tem_factors
+            offset = (
+                self._natoms - self._eigen_values_zero * self.dof_per_node
+            ) * np.log(tem_scaling)
+        return tem_scaling * (self._free_energy_contrib - offset)
+
     @property
     @abstractmethod
     def _interactions(self) -> np.ndarray | None:
@@ -539,18 +570,6 @@ class ENM(ABC):
         -------
         interactions : ndarray, dtype=float, optional
             The characteristic interactions matrix.
-        """
-        pass
-
-    @property
-    @abstractmethod
-    def _dof_per_node(self) -> int:
-        """
-        Returns
-        -------
-        dof_per_node : int
-            Returns the Degree of Freedom per atom.
-            1 for GNM and 3 for ANM.
         """
         pass
 
@@ -749,15 +768,20 @@ class ENM(ABC):
         for i, j, delta in np.nditer([atom_i, atom_j, deltas]):
             if self._covariance is not None:
                 x = self._covariance[i, :] - self._covariance[j, :]
-                beta = 1 + delta * (x[j] - x[i])
+                beta = float(1 + delta * (x[j] - x[i]))
 
                 if np.abs(beta) < 1e-10:  # TODO use relative instead of absolute diff?
                     self._modify_contact_pair_rank_decrease(x)
+                    self._free_energy_contrib = None
                 elif np.abs(self._covariance[i, j]) < 1e-10:  # TODO mathematical proof
                     self._modify_contact_pair_rank_increase(i, j, delta, x, beta)
+                    self._free_energy_contrib = None
                 else:
                     # default case
                     self._covariance += np.outer(x * delta / beta, x)
+
+                    if self._free_energy_contrib is not None:
+                        self._free_energy_contrib += beta  # TODO *3 for GNM
 
             self._interactions[i, j] += delta
             self._interactions[j, i] += delta

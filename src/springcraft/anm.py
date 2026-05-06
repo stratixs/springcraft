@@ -125,6 +125,10 @@ class ANM(ENM):
         self._hessian = value
         # Invalidate dependent values
         self._covariance = None
+        self._eigen_values = None
+        self._eigen_values_zero = 0
+        self._eigen_vectors = None
+        self._free_energy_contrib = None
 
     @ENM.covariance.setter
     @override
@@ -132,6 +136,17 @@ class ANM(ENM):
         super().covariance = value
         # Invalidate dependent values
         self._hessian = None
+
+    @property
+    @override
+    def dof_per_node(self) -> int:
+        """
+        Returns
+        -------
+        dof_per_node : int
+            Returns the Degree of Freedom per atom.
+        """
+        return 3
 
     def normal_mode(
         self,
@@ -279,11 +294,6 @@ class ANM(ENM):
     @override
     def _interactions(self) -> np.ndarray | None:
         return self._hessian
-
-    @property
-    @override
-    def _dof_per_node(self) -> int:
-        return 1
 
     @staticmethod
     @override

@@ -361,6 +361,37 @@ def dcc(
     return dcc
 
 
+def free_energy_contribution(enm, tem=None, tem_factors=K_B) -> float:
+    """
+    Calculates the contribution of the protein configuration to the
+    Helmholtz free energy.
+
+    According to
+    Hamacher K. Free energy of contact formation in proteins: efficient computation in the elastic network approximation. Phys Rev E Stat Nonlin Soft Matter Phys. 2011 Jul;84(1 Pt 2):016703. doi: 10.1103/PhysRevE.84.016703. Epub 2011 Jul 7. PMID: 21867339.
+    """
+
+    from .enm import ENM
+    from .gnm import GNM
+
+    if not isinstance(enm, ENM):
+        raise ValueError("Instance of ENM class expected.")
+
+    eig_vals, _, nzero = enm.eigen()
+    dof = enm.dof_per_node
+
+    tem_scaling = 1
+    if tem is not None:
+        tem_scaling = tem * tem_factors
+
+    pdet_log = np.multiply.reduce(np.log(eig_vals[nzero:]))
+    base = (len(eig_vals) - nzero * dof) * np.log(2 * np.pi * tem_scaling)
+    free_energy_contrib = tem_scaling * (pdet_log - base)
+    if isinstance(enm, GNM):
+        free_energy_contrib *= 3
+
+    return free_energy_contrib
+
+
 ## ANM specific functions
 def normal_mode(
     anm,

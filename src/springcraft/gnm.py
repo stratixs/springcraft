@@ -112,7 +112,9 @@ class GNM(ENM):
         # Invalidate dependent values
         self._covariance = None
         self._eigen_values = None
+        self._eigen_values_zero = 0
         self._eigen_vectors = None
+        self._free_energy_contrib = None
 
     @ENM.covariance.setter
     @override
@@ -123,13 +125,19 @@ class GNM(ENM):
 
     @property
     @override
-    def _interactions(self) -> np.ndarray | None:
-        return self._kirchhoff
+    def dof_per_node(self) -> int:
+        """
+        Returns
+        -------
+        dof_per_node : int
+            Returns the Degree of Freedom per atom.
+        """
+        return 1
 
     @property
     @override
-    def _dof_per_node(self) -> int:
-        return 1
+    def _interactions(self) -> np.ndarray | None:
+        return self._kirchhoff
 
     @staticmethod
     @override
