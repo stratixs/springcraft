@@ -114,7 +114,6 @@ class GNM(ENM):
         self._eigen_values = None
         self._eigen_values_zero = 0
         self._eigen_vectors = None
-        self._free_energy_contrib = None
 
     @ENM.covariance.setter
     @override
