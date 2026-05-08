@@ -4,12 +4,12 @@ calculations using *Gaussian Network Models*.
 """
 
 __name__ = "springcraft"
-__author__ = "Patrick Kunzmann, Faisal Islam"
+__author__ = "Patrick Kunzmann, Faisal Islam, Raphael Sutter"
 __all__ = ["GNM"]
 
 import biotite.structure as struc
 import numpy as np
-from typing_extensions import override
+from typing_extensions import Literal, Union, overload, override
 
 from .enm import ENM
 from .forcefield import ForceField
@@ -132,6 +132,53 @@ class GNM(ENM):
         """
         return 1
 
+    @overload
+    def eigen(
+        self, nzero: Literal[False] = False, copy: bool = True, tol: float = 1e-12
+    ) -> tuple[np.ndarray, np.ndarray]: ...
+
+    @overload
+    def eigen(
+        self, nzero: Literal[True], copy: bool = True, tol: float = 1e-12
+    ) -> tuple[np.ndarray, np.ndarray, int]: ...
+
+    @override
+    def eigen(
+        self, nzero=False, copy=True, tol=1e-12
+    ) -> Union[tuple[np.ndarray, np.ndarray], tuple[np.ndarray, np.ndarray, int]]:
+        """
+        Compute or fetch the Eigenvalues and Eigenvectors of the
+        *Kirchhoff* matrix.
+
+        The laplacian *Kirchhoff* matrix is guaranteed to be
+        rank-deficient. Numerical inconsistencies occur during
+        eigenvalue calculation. All quasi-zero eigenvalues are set to 0.
+
+        Parameters
+        ----------
+        nzero : bool, optional, default=False
+            Whether to return number of zero eigenvalues.
+        copy : bool, optional, default=True
+            Whether to return the eigenvalues and eigenvectors as copies.
+            If you choose not to return copies a modification to these
+            values can reflect in incorrect behaviour of the class.
+        tol : float, optional, default=1e-10
+            Threshold for zero eigenvalues. All eigenvalues below this
+            value are set to 0.
+
+        Returns
+        -------
+        eig_values : ndarray, shape=(k,), dtype=float
+            Eigenvalues of the *Kirchhoff* matrix in ascending order.
+        eig_vectors : ndarray, shape=(k,n), dtype=float
+            Eigenvectors of the *Kirchhoff* matrix.
+            ``eig_values[i]`` corresponds to ``eigenvectors[i]``.
+        nzero : int, optional
+            The number of zero eigenvalues. Only returned if ``nzero`` is set.
+        """
+        self.kirchhoff
+        return super().eigen(nzero, copy, tol)
+
     @property
     @override
     def _interactions(self) -> np.ndarray | None:
@@ -142,24 +189,3 @@ class GNM(ENM):
     def _calc_mass_weight_matrix(masses: np.ndarray) -> np.ndarray:
         mass_weights = 1 / np.sqrt(masses)
         return np.outer(mass_weights, mass_weights)
-
-    @override
-    def eigen(self) -> tuple[np.ndarray, np.ndarray]:
-        """
-        Compute the Eigenvalues and Eigenvectors of the
-        *Kirchhoff* matrix.
-
-        Returns
-        -------
-        eig_values : ndarray, shape=(k,), dtype=float
-            Eigenvalues of the *Kirchhoff* matrix in ascending order.
-
-            This is not a copy: Create a copy before modifying this matrix.
-        eig_vectors : ndarray, shape=(k,n), dtype=float
-            Eigenvectors of the *Kirchhoff* matrix.
-            ``eig_values[i]`` corresponds to ``eigenvectors[i]``.
-
-            This is not a copy: Create a copy before modifying this matrix.
-        """
-        # only called for proper docstring
-        return super().eigen()

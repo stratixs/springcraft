@@ -6,6 +6,7 @@ import biotite.structure as struc
 import biotite.structure.io.pdb as pdb
 import numpy as np
 import pytest
+
 import springcraft
 
 from .util import data_dir
@@ -316,8 +317,6 @@ def test_frequency_fluctuation_dcc(ff_name):
             assert np.allclose(test_fluc_nomw, reference_fluc)
         # Bio3d-FFs
         else:
-            print(test_freq[6:])
-            print(reference_freq[6:])
             assert np.allclose(
                 test_freq[6:], reference_freq[6:], rtol=5e-03, atol=2e-03
             )
@@ -325,6 +324,9 @@ def test_frequency_fluctuation_dcc(ff_name):
             assert np.allclose(
                 test_fluc_subset, reference_fluc_subset, rtol=5e-03, atol=2e-03
             )
+            print(test_dcc)
+            print(reference_dcc)
+            print(np.max(np.abs(test_dcc - reference_dcc)))
             assert np.allclose(test_dcc, reference_dcc, rtol=5e-03, atol=2e-03)
             assert np.allclose(
                 test_dcc_subset, reference_dcc_subset, rtol=5e-03, atol=2e-03

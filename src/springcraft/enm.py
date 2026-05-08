@@ -11,6 +11,7 @@ from abc import ABC, abstractmethod
 import biotite.structure as struc
 import biotite.structure.info as strucinfo
 import numpy as np
+from typing_extensions import Literal, Union, overload
 
 from . import nma
 from .forcefield import ForceField
@@ -126,13 +127,12 @@ class ENM(ABC):
         if self._covariance is None:
             # same algorithm as linalg.pinv
             # but we want to store calculates eigenvalues in the process
-            s, vt = self.eigen()
-            u = vt.T
+            s, u, nzero = self.eigen(nzero=True, copy=False)
 
-            k = np.argmax(s > 1e-14)  # zero eigenvalues stay zero
-            s[k:] = 1 / s[k:]
+            si = np.zeros_like(s)
+            si[nzero:] = 1 / s[nzero:]
 
-            self._covariance = u @ np.multiply(s[..., np.newaxis], vt)
+            self._covariance = u.T @ np.multiply(si[..., np.newaxis], u)
 
         return self._covariance
 
@@ -150,22 +150,48 @@ class ENM(ABC):
     def dof_per_node(self) -> int:
         pass
 
-    def eigen(self) -> tuple[np.ndarray, np.ndarray]:
+    @overload
+    def eigen(
+        self, nzero: Literal[False] = False, copy: bool = True, tol: float = 1e-12
+    ) -> tuple[np.ndarray, np.ndarray]: ...
+
+    @overload
+    def eigen(
+        self, nzero: Literal[True], copy: bool = True, tol: float = 1e-12
+    ) -> tuple[np.ndarray, np.ndarray, int]: ...
+
+    def eigen(
+        self, nzero=False, copy=True, tol=1e-12
+    ) -> Union[tuple[np.ndarray, np.ndarray], tuple[np.ndarray, np.ndarray, int]]:
         """
         Compute or fetch the Eigenvalues and Eigenvectors of the
         *interaction* matrix.
+
+        The laplacian `interaction` matrix is guaranteed to be
+        rank-deficient. Numerical inconsistencies occur during
+        eigenvalue calculation. All quasi-zero eigenvalues are set to 0.
+
+        Parameters
+        ----------
+        nzero : bool, optional, default=False
+            Whether to return number of zero eigenvalues.
+        copy : bool, optional, default=True
+            Whether to return the eigenvalues and eigenvectors as copies.
+            If you choose not to return copies a modification to these
+            values can reflect in incorrect behaviour of the class.
+        tol : float, optional, default=1e-10
+            Threshold for zero eigenvalues. All eigenvalues below this
+            value are set to 0.
 
         Returns
         -------
         eig_values : ndarray, shape=(k,), dtype=float
             Eigenvalues of the matrix in ascending order.
-
-            This is not a copy: Create a copy before modifying this matrix.
         eig_vectors : ndarray, shape=(k,n), dtype=float
             Eigenvectors of the matrix.
             ``eig_values[i]`` corresponds to ``eigenvectors[i]``.
-
-            This is not a copy: Create a copy before modifying this matrix.
+        nzero : int, optional
+            The number of zero eigenvalues. Only returned if ``nzero`` is set.
         """
         if self._eigen_values is None or self._eigen_vectors is None:
             if self._interactions is None:
@@ -173,11 +199,24 @@ class ENM(ABC):
 
             self._eigen_values, self._eigen_vectors = np.linalg.eigh(self._interactions)
 
-            # numerical cleanup for zero eigenvalues
-            k = np.argmax(self._eigen_values > 1e-14)
-            self._eigen_values[:k] = 0
+            self._eigen_values_nzero = len(self._eigen_values)
+            i = 0
+            while i < self._eigen_values_nzero:
+                if self._eigen_values[i] > tol:
+                    self._eigen_values_nzero = i
+                    break
+                i = i + 1
+            self._eigen_values[: self._eigen_values_nzero] = 0
 
-        return self._eigen_values, self._eigen_vectors.T
+        val = self._eigen_values
+        vec = self._eigen_vectors.T
+        if copy:
+            val = val.copy()
+            vec = vec.copy()
+
+        if nzero:
+            return val, vec, self._eigen_values_nzero
+        return val, vec
 
     def frequencies(self) -> np.ndarray:
         """
@@ -357,7 +396,7 @@ class ENM(ABC):
 
         Returns
         -------
-        interactions : ndarray, dtype=float, optional
+        interactions : ndarray, dtype=float or None
             The characteristic interactions matrix.
         """
         pass
