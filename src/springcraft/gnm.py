@@ -13,7 +13,6 @@ from typing_extensions import override
 
 from .enm import ENM
 from .forcefield import ForceField
-from .interaction import compute_kirchhoff
 
 
 class GNM(ENM):
@@ -86,9 +85,15 @@ class GNM(ENM):
     def kirchhoff(self) -> np.ndarray:
         if self._kirchhoff is None:
             if self._covariance is None:
-                self._kirchhoff, _ = compute_kirchhoff(
-                    self._coord, self._ff, self._use_cell_list
-                )
+                atom_i, atom_j, _, sq_dist = self._calc_adjacency()
+                force_constants = self._ff.force_constant(atom_i, atom_j, sq_dist)
+
+                self._kirchhoff = np.zeros((self._natoms, self._natoms))
+                self._kirchhoff[atom_i, atom_j] = -force_constants
+
+                # Set values for main diagonal
+                np.fill_diagonal(self._kirchhoff, -np.sum(self._kirchhoff, axis=0))
+
                 if self._mass_weight_matrix is not None:
                     self._kirchhoff *= self._mass_weight_matrix
             else:
@@ -106,6 +111,8 @@ class GNM(ENM):
         self._kirchhoff = value
         # Invalidate dependent values
         self._covariance = None
+        self._eigen_values = None
+        self._eigen_vectors = None
 
     @ENM.covariance.setter
     @override
@@ -116,13 +123,19 @@ class GNM(ENM):
 
     @property
     @override
-    def _interactions(self) -> np.ndarray:
-        return self.kirchhoff
+    def dof_per_node(self) -> int:
+        """
+        Returns
+        -------
+        dof_per_node : int
+            Returns the Degree of Freedom per atom.
+        """
+        return 1
 
     @property
     @override
-    def _dof_per_node(self) -> int:
-        return 1
+    def _interactions(self) -> np.ndarray | None:
+        return self._kirchhoff
 
     @staticmethod
     @override

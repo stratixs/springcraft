@@ -16,7 +16,6 @@ from typing_extensions import override
 from . import nma
 from .enm import ENM
 from .forcefield import ForceField
-from .interaction import compute_hessian
 
 
 class ANM(ENM):
@@ -88,9 +87,25 @@ class ANM(ENM):
     def hessian(self) -> np.ndarray:
         if self._hessian is None:
             if self._covariance is None:
-                self._hessian, _ = compute_hessian(
-                    self._coord, self._ff, self._use_cell_list
+                atom_i, atom_j, disp, sq_dist = self._calc_adjacency()
+                force_constants = self._ff.force_constant(atom_i, atom_j, sq_dist)
+
+                self._hessian = np.zeros((self._natoms, self._natoms, 3, 3))
+                self._hessian[atom_i, atom_j] = (
+                    -force_constants[:, np.newaxis, np.newaxis]
+                    / sq_dist[:, np.newaxis, np.newaxis]
+                    * disp[:, :, np.newaxis]
+                    * disp[:, np.newaxis, :]
                 )
+                # Set values for main diagonal
+                indices = np.arange(self._natoms)
+                self._hessian[indices, indices] = -np.sum(self._hessian, axis=0)
+
+                # Reshape to (20*3, 20*3) matrix
+                self._hessian = np.transpose(self._hessian, (0, 2, 1, 3)).reshape(
+                    self._natoms * 3, self._natoms * 3
+                )
+
                 if self._mass_weight_matrix is not None:
                     self._hessian *= self._mass_weight_matrix
             else:
@@ -110,6 +125,8 @@ class ANM(ENM):
         self._hessian = value
         # Invalidate dependent values
         self._covariance = None
+        self._eigen_values = None
+        self._eigen_vectors = None
 
     @ENM.covariance.setter
     @override
@@ -117,6 +134,19 @@ class ANM(ENM):
         super().covariance = value
         # Invalidate dependent values
         self._hessian = None
+        self._eigen_values = None
+        self._eigen_vectors = None
+
+    @property
+    @override
+    def dof_per_node(self) -> int:
+        """
+        Returns
+        -------
+        dof_per_node : int
+            Returns the Degree of Freedom per atom.
+        """
+        return 3
 
     def normal_mode(
         self,
@@ -262,13 +292,8 @@ class ANM(ENM):
 
     @property
     @override
-    def _interactions(self) -> np.ndarray:
-        return self.hessian
-
-    @property
-    @override
-    def _dof_per_node(self) -> int:
-        return 1
+    def _interactions(self) -> np.ndarray | None:
+        return self._hessian
 
     @staticmethod
     @override

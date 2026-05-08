@@ -41,6 +41,7 @@ numpy = ">=2.0"
 [tool.poetry.group.dev.dependencies]
 pytest = ">=8.0"
 ruff = ">=0.6.7"
+pytest-cov = "^7.1.0"
 
 [tool.poetry.group.docs.dependencies]
 ammolite = ">=0.8"

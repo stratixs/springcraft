@@ -113,9 +113,9 @@ class ENM(ABC):
         else:
             self._mass_weight_matrix = None
 
+        self._covariance = None
         self._eigen_values = None
         self._eigen_vectors = None
-        self._covariance = None
 
     @property
     def masses(self) -> np.ndarray | None:
@@ -138,10 +138,17 @@ class ENM(ABC):
 
     @covariance.setter
     def covariance(self, value: np.ndarray):
-        length = self._natoms * self._dof_per_node
+        length = self._natoms * self.dof_per_node
         if value.shape != (length, length):
             raise IndexError(f"Expected shape {(length, length)}, got {value.shape}")
         self._covariance = value
+        self._eigen_values = None
+        self._eigen_vectors = None
+
+    @property
+    @abstractmethod
+    def dof_per_node(self) -> int:
+        pass
 
     def eigen(self) -> tuple[np.ndarray, np.ndarray]:
         """
@@ -161,6 +168,9 @@ class ENM(ABC):
             This is not a copy: Create a copy before modifying this matrix.
         """
         if self._eigen_values is None or self._eigen_vectors is None:
+            if self._interactions is None:
+                raise ValueError("Initialize interactions matrix first.")
+
             self._eigen_values, self._eigen_vectors = np.linalg.eigh(self._interactions)
 
             # numerical cleanup for zero eigenvalues
@@ -332,7 +342,7 @@ class ENM(ABC):
 
     @property
     @abstractmethod
-    def _interactions(self) -> np.ndarray:
+    def _interactions(self) -> np.ndarray | None:
         """
         Returns the characteristic interaction matrix for this ENM e.g.
         - the *Kirchhoff* matrix in case of the GNM or
@@ -347,20 +357,8 @@ class ENM(ABC):
 
         Returns
         -------
-        interactions : ndarray, dtype=float
+        interactions : ndarray, dtype=float, optional
             The characteristic interactions matrix.
-        """
-        pass
-
-    @property
-    @abstractmethod
-    def _dof_per_node(self) -> int:
-        """
-        Returns
-        -------
-        dof_per_node : int
-            Returns the Degree of Freedom per atom.
-            1 for GNM and 3 for ANM.
         """
         pass
 
@@ -368,3 +366,153 @@ class ENM(ABC):
     @abstractmethod
     def _calc_mass_weight_matrix(masses: np.ndarray) -> np.ndarray:
         pass
+
+    def _calc_adjacency(self):
+        """
+        Calculates the adjacency matrix and returns the values as lists.
+
+        The adjacency matrix is a weigthed graph that spanns the
+        elastic network. Atoms are considered as being in contact
+        when their distance is below the `ForceField`s threshold.
+        The contacts may be overridden by using a `PatchedForceField`.
+
+        When `_use_cell_list` is set uses an optimized strategy
+        working on point lists instead off matrizes which reduces
+        base operations for sparse cases. Otherwise uses a
+        computationally expensive brute-force approach.
+
+        Sets the class attribute `_adjacency` and returns the indices,
+        displacements and squared distances as list for faster
+        processing in sparse matrices.
+
+        Returns
+        -------
+        atom_i_list: ndarray, shape=(k,), dtype=list
+            list of the first atom indices
+        atom_j_list: ndarray, shape=(k,), dtype=list
+            list of the sceond atom indices
+        disp_list: ndarray, shape=(k,3), dtype=float
+            displacement between atom_i and atom_j
+        sq_dist_list: ndarray, shape=(k,), dtype=float
+            squared distance between atom_i and atom_j
+        """
+        # Convert into higher precision to avert numerical issues in pseudoinverse calculation
+        coord = self._coord.astype(np.float64, copy=False)
+        # Find interacting atoms within cutoff distance
+        cutoff_dist = self._ff.cutoff_distance
+
+        # contacts to shut off
+        turn_off = np.zeros((self._natoms, self._natoms), dtype=np.bool)
+        if self._ff.contact_shutdown is not None:
+            turn_off[self._ff.contact_shutdown, :] = True
+            turn_off[:, self._ff.contact_shutdown] = True
+        if self._ff.contact_pair_off is not None:
+            contact_off = np.sort(self._ff.contact_pair_off, axis=1).T
+            turn_off[contact_off[0, :], contact_off[1, :]] = True
+            turn_off[contact_off[1, :], contact_off[0, :]] = True
+
+        if cutoff_dist is not None and self._use_cell_list:
+            # use optimized strategy
+            sq_dist_matrix = np.zeros((self._natoms, self._natoms))
+            cell_list = struc.CellList(coord, cutoff_dist)  # pyright: ignore[reportAttributeAccessIssue]
+            adj_indices = cell_list.get_atoms(coord, cutoff_dist)
+
+            # allocate return values
+            init_len = adj_indices.size
+            if self._ff.contact_pair_on is not None:
+                init_len += np.size(self._ff.contact_pair_on, axis=0)
+            atom_i_list = np.empty(init_len, dtype=np.int32)
+            atom_j_list = np.empty(init_len, dtype=np.int32)
+            disp_list = np.empty((init_len, 3))
+            sq_dist_list = np.empty(init_len)
+            idx = 0
+
+            # iterate over atoms
+            i_iter, j_iter = np.nested_iters(adj_indices, [[0], [1]], flags=["c_index"])
+            for _ in i_iter:
+                atom_i = i_iter.index
+                atom_i_coord = coord[atom_i]
+
+                # iterate over contacts
+                for atom_j in j_iter:
+                    if atom_j < 0:  # pyright: ignore[reportOperatorIssue]
+                        # handled every contact for atom
+                        break
+                    if atom_j >= atom_i:  # pyright: ignore[reportOperatorIssue]
+                        # only calc sq_distance for lower triangle
+                        continue
+                    if turn_off[atom_i, atom_j]:
+                        continue
+
+                    disp = struc.displacement(atom_i_coord, coord[atom_j])
+                    sq_dist = np.dot(disp, disp)
+                    sq_dist_matrix[atom_i, atom_j] = sq_dist
+                    sq_dist_matrix[atom_j, atom_i] = sq_dist
+
+                    atom_i_list[idx] = atom_i
+                    atom_j_list[idx] = atom_j
+                    disp_list[idx, :] = disp
+                    sq_dist_list[idx] = sq_dist
+                    idx += 1
+                    atom_i_list[idx] = atom_j
+                    atom_j_list[idx] = atom_i
+                    disp_list[idx, :] = disp
+                    sq_dist_list[idx] = sq_dist
+                    idx += 1
+
+            # manually switched on contacts
+            if self._ff.contact_pair_on is not None:
+                # TODO move input validation to ForceField
+                contacts = np.sort(self._ff.contact_pair_on, axis=1)
+                for atom_i, atom_j in np.nditer((contacts[:, 0], contacts[:, 1])):
+                    if sq_dist_matrix[atom_i, atom_j] != 0:
+                        # atom already on
+                        continue
+
+                    disp = struc.displacement(coord[atom_i], coord[atom_j])
+                    sq_dist = np.dot(disp, disp)
+                    sq_dist_matrix[atom_i, atom_j] = sq_dist
+                    sq_dist_matrix[atom_j, atom_i] = sq_dist
+
+                    atom_i_list[idx] = atom_i
+                    atom_j_list[idx] = atom_j
+                    disp_list[idx, :] = disp
+                    sq_dist_list[idx] = sq_dist
+                    idx += 1
+                    atom_i_list[idx] = atom_j
+                    atom_j_list[idx] = atom_i
+                    disp_list[idx, :] = disp
+                    sq_dist_list[idx] = sq_dist
+                    idx += 1
+
+            # trim output arrays
+            atom_i_list = np.resize(atom_i_list, idx)
+            atom_j_list = np.resize(atom_j_list, idx)
+            disp_list = np.resize(disp_list, (idx, 3))
+            sq_dist_list = np.resize(sq_dist_list, idx)
+
+        else:
+            # brute force
+            disp_matrix = struc.displacement(
+                coord[np.newaxis, :, :], coord[:, np.newaxis, :]
+            )
+            sq_dist_matrix = np.sum(disp_matrix * disp_matrix, axis=-1)
+
+            # map which contacts to set zero
+            if cutoff_dist is not None:
+                map = sq_dist_matrix > cutoff_dist**2
+            else:
+                map = np.zeros(sq_dist_matrix.shape, dtype=np.bool)
+            map |= turn_off
+            if self._ff.contact_pair_on is not None:
+                contacts_on = np.sort(self._ff.contact_pair_on, axis=1).T
+                map[contacts_on[0, :], contacts_on[1, :]] = False
+                map[contacts_on[1, :], contacts_on[0, :]] = False
+            sq_dist_matrix[map] = 0
+
+            # retrieve lists
+            atom_i_list, atom_j_list = np.where(sq_dist_matrix)
+            disp_list = disp_matrix[atom_i_list, atom_j_list, :]
+            sq_dist_list = sq_dist_matrix[atom_i_list, atom_j_list]
+
+        return atom_i_list, atom_j_list, disp_list, sq_dist_list

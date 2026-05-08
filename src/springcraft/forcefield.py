@@ -23,6 +23,7 @@ from os.path import dirname, join, realpath
 import biotite.sequence as seq
 import biotite.structure as struc
 import numpy as np
+from typing_extensions import override
 
 DATA_DIR = join(dirname(realpath(__file__)), "data")
 
@@ -123,6 +124,10 @@ class ForceField(metaclass=abc.ABCMeta):
     def natoms(self) -> int | None:
         return None
 
+    @property
+    def _force_constants(self) -> np.ndarray | None:
+        return None
+
 
 class PatchedForceField(ForceField):
     """
@@ -169,7 +174,7 @@ class PatchedForceField(ForceField):
         self._contact_pair_on = (
             np.asarray(contact_pair_on) if contact_pair_on is not None else None
         )
-        self._force_constants = (
+        self._force_constants_local = (
             np.asarray(force_constants) if force_constants is not None else None
         )
 
@@ -178,14 +183,14 @@ class PatchedForceField(ForceField):
         _check_indices(force_field.natoms, self._contact_pair_off)
         _check_indices(force_field.natoms, self._contact_pair_on)
         if self._contact_pair_on is not None:
-            if self._force_constants is None:
+            if self._force_constants_local is None:
                 raise TypeError(
                     "Individual force constants must be given, "
                     "if contacts are turned on"
                 )
-            if len(self._force_constants) != len(self._contact_pair_on):
+            if len(self._force_constants_local) != len(self._contact_pair_on):
                 raise IndexError(
-                    f"{len(self._force_constants)} force constants were "
+                    f"{len(self._force_constants_local)} force constants were "
                     f"given for "
                     f"{len(self._contact_pair_on)} switched on contact_pairs"
                 )
@@ -206,8 +211,8 @@ class PatchedForceField(ForceField):
                 atom_i[cutoff_mask], atom_j[cutoff_mask], sq_distance[cutoff_mask]
             )
 
-        if self._contact_pair_on is not None:
-            patch_atom_i, patch_atom_j = self._contact_pair_on.T
+        if self.contact_pair_on is not None:
+            patch_atom_i, patch_atom_j = self.contact_pair_on.T
             # The minimum required size of the patch matrix is the
             # maximum of the indices + 1
             required_size = (
@@ -269,6 +274,18 @@ class PatchedForceField(ForceField):
             )
 
     @property
+    def _force_constants(self) -> np.ndarray | None:
+        if (
+            self._force_constants_local is None
+            or self._force_field._force_constants is None
+        ):
+            return self._force_constants_local
+        else:
+            return np.concatenate(
+                [self._force_constants_local, self._force_field._force_constants]
+            )
+
+    @property
     def natoms(self) -> int | None:
         return self._force_field.natoms
 
@@ -293,12 +310,14 @@ class InvariantForceField(ForceField):
             raise ValueError("Cutoff distance must be a float")
         self._cutoff_distance = cutoff_distance
 
+    @override
     def force_constant(
         self, atom_i: np.ndarray, atom_j: np.ndarray, sq_distance: np.ndarray
     ) -> np.ndarray:
         return np.ones(len(atom_i))
 
     @property
+    @override
     def cutoff_distance(self) -> float:
         return self._cutoff_distance
 
@@ -427,6 +446,8 @@ class TabulatedForceField(ForceField):
             - 3-dim array:
               Individual value for each distance bin and pair of amino
               acid types.
+
+        The quadratic layers of the matrizes must be symmetric.
 
     cutoff_distance : float or None or ndarray, shape=(k), dtype=float
         If no distance dependent values are given for `bonded`,
@@ -982,12 +1003,10 @@ def _load_matrix(fname: str) -> np.ndarray:
 
 
 def _check_indices(length: int | None, indices: np.ndarray | None) -> None:
-    if indices is None and length is None:
-        return
     if indices is None or length is None:
-        raise ValueError("Either bound or indices are missing.")
+        return
     flat_indices = indices.flatten()
-    out_of_bounds_i = np.where(flat_indices >= length)[0]
+    out_of_bounds_i = np.where((flat_indices < 0) | (flat_indices >= length))[0]
     if len(out_of_bounds_i) > 0:
         raise IndexError(
             f"Index {flat_indices[out_of_bounds_i[0]]} is out of bounds "
