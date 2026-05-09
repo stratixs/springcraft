@@ -23,6 +23,7 @@ from os.path import dirname, join, realpath
 import biotite.sequence as seq
 import biotite.structure as struc
 import numpy as np
+import numpy.typing as npt
 from typing_extensions import override
 
 DATA_DIR = join(dirname(realpath(__file__)), "data")
@@ -140,16 +141,16 @@ class PatchedForceField(ForceField):
         The base force field.
         For all atoms pairs, that are not patched, the force
         constant from the base force field is taken
-    contact_shutdown : ndarray, shape=(n,), dtype=float, optional
+    contact_shutdown : arraylike, shape=(n,), dtype=float, optional
         Indices that point to atoms, whose contacts to all other
         atoms are artificially switched off.
-    contact_pair_off : ndarray, shape=(n,2), dtype=int, optional
+    contact_pair_off : arraylike, shape=(n,2), dtype=int, optional
         Indices that point to pairs of atoms, whose contacts
         are artificially switched off.
-    contact_pair_on : ndarray, shape=(n,2), dtype=int, optional
+    contact_pair_on : arraylike, shape=(n,2), dtype=int, optional
         Indices that point to pairs of atoms, whose contacts
         are are artificially established.
-    force_constants : ndarray, shape=(n,), dtype=float, optional
+    force_constants : arraylike, shape=(n,), dtype=float, optional
         Individual force constants for artificially established
         contacts.
         Must be given, if `contact_pair_on` is set.
@@ -158,10 +159,10 @@ class PatchedForceField(ForceField):
     def __init__(
         self,
         force_field: ForceField,
-        contact_shutdown: np.ndarray | None = None,
-        contact_pair_off: np.ndarray | None = None,
-        contact_pair_on: np.ndarray | None = None,
-        force_constants: np.ndarray | None = None,
+        contact_shutdown: npt.ArrayLike | None = None,
+        contact_pair_off: npt.ArrayLike | None = None,
+        contact_pair_on: npt.ArrayLike | None = None,
+        force_constants: npt.ArrayLike | None = None,
     ):
         # Support other array-like objects
         self._force_field = force_field

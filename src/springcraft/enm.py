@@ -145,10 +145,12 @@ class ENM(ABC):
         self._eigen_values = None
         self._eigen_vectors = None
 
+        self._on_covariance_set()
+
     @property
     @abstractmethod
     def dof_per_node(self) -> int:
-        pass
+        pass  # pragma: no cover
 
     @overload
     def eigen(
@@ -194,8 +196,7 @@ class ENM(ABC):
             The number of zero eigenvalues. Only returned if ``nzero`` is set.
         """
         if self._eigen_values is None or self._eigen_vectors is None:
-            if self._interactions is None:
-                raise ValueError("Initialize interactions matrix first.")
+            assert self._interactions is not None  # should never happen
 
             self._eigen_values, self._eigen_vectors = np.linalg.eigh(self._interactions)
 
@@ -399,12 +400,12 @@ class ENM(ABC):
         interactions : ndarray, dtype=float or None
             The characteristic interactions matrix.
         """
-        pass
+        pass  # pragma: no cover
 
     @staticmethod
     @abstractmethod
     def _calc_mass_weight_matrix(masses: np.ndarray) -> np.ndarray:
-        pass
+        pass  # pragma: no cover
 
     def _calc_adjacency(self):
         """
@@ -555,3 +556,7 @@ class ENM(ABC):
             sq_dist_list = sq_dist_matrix[atom_i_list, atom_j_list]
 
         return atom_i_list, atom_j_list, disp_list, sq_dist_list
+
+    @abstractmethod
+    def _on_covariance_set(self):
+        pass  # pragma: no cover

@@ -126,15 +126,6 @@ class ANM(ENM):
         self._eigen_values = None
         self._eigen_vectors = None
 
-    @ENM.covariance.setter
-    @override
-    def covariance(self, value: np.ndarray):
-        super().covariance = value
-        # Invalidate dependent values
-        self._hessian = None
-        self._eigen_values = None
-        self._eigen_vectors = None
-
     @property
     @override
     def dof_per_node(self) -> int:
@@ -347,3 +338,7 @@ class ANM(ENM):
         # as the Hessian has 3 entries (x, y, z) for each atom
         mass_weights = np.repeat(mass_weights, 3)
         return np.outer(mass_weights, mass_weights)
+
+    @override
+    def _on_covariance_set(self):
+        self._hessian = None

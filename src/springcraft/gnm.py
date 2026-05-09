@@ -114,13 +114,6 @@ class GNM(ENM):
         self._eigen_values = None
         self._eigen_vectors = None
 
-    @ENM.covariance.setter
-    @override
-    def covariance(self, value: np.ndarray):
-        super().covariance = value
-        # Invalidate dependent values
-        self._kirchhoff = None
-
     @property
     @override
     def dof_per_node(self) -> int:
@@ -189,3 +182,7 @@ class GNM(ENM):
     def _calc_mass_weight_matrix(masses: np.ndarray) -> np.ndarray:
         mass_weights = 1 / np.sqrt(masses)
         return np.outer(mass_weights, mass_weights)
+
+    @override
+    def _on_covariance_set(self):
+        self._kirchhoff = None
