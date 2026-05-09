@@ -186,6 +186,38 @@ def test_patched_force_field_pairs_on(atoms):
     assert np.all(test_kirchhoff_2 == ref_kirchhoff_2)
 
 
+def test_patched_force_field_propagates_update(atoms):
+    """
+    Tests whether the PatchedForceField calls the update method of the
+    underlying ForceField resulting in force changes.
+    """
+    # Create symmetric random type-specific interaction matrices
+    np.random.seed(0)
+    triu = np.triu(np.random.rand(3, 20, 20))
+    bonded, intra, inter = triu + np.transpose(triu, (0, 2, 1))
+
+    ff = springcraft.TabulatedForceField(atoms, bonded, intra, inter, None)
+    patched_ff = springcraft.PatchedForceField(ff)
+    force_before = patched_ff.force_constant(np.array(0), np.array(1), np.array(1))
+    atoms.res_name[1] = "ALA"
+    assert patched_ff.update(1, atoms[1])
+    force_after = patched_ff.force_constant(np.array(0), np.array(1), np.array(1))
+    assert force_before != force_after
+
+
+def test_invariant_force_field(atoms):
+    "Tests whether the basic InvariantForceField works."
+    N_CONTACTS = 5
+    CUTOFF_DIST = 7.0
+
+    ff = springcraft.InvariantForceField(CUTOFF_DIST)
+    force_constants = ff.force_constant(
+        np.arange(N_CONTACTS), np.arange(N_CONTACTS), np.arange(N_CONTACTS)
+    )
+    assert np.all(force_constants == np.ones(N_CONTACTS))
+    assert ff.cutoff_distance == CUTOFF_DIST
+
+
 def test_tabulated_forcefield_homogeneous(atoms):
     """
     Check contents of position-specifc interaction matrix, where the
@@ -404,6 +436,59 @@ def test_tabulated_forcefield_predefined(atoms, name):
     ff = meth(atoms)
 
     assert ff is not None
+
+
+@pytest.mark.parametrize(
+    "idx, res_name, expected",
+    [
+        [0, "GLU", True],  # start of first chain
+        [5, "PHE", True],  # middle of chain
+        [19, "ALA", True],  # end of first chain
+        [20, "GLU", True],  # start of second chain
+        [39, "ALA", True],  # end of second chain
+        [1, "LEU", False],  # no change
+    ],
+)
+def test_tabulated_forcefield_update(atoms, idx, res_name, expected):
+    """
+    Test the pertubation of the ForceField. A pertubation is considered
+    successful if the pertubated ForceField results in the same
+    interaction matrix as a ForceField created with the pertubated atoms.
+    Special attention needs to be given to edge cases (endings of chains).
+    """
+    N_BINS = 3
+
+    upper = np.triu(np.ones((20, 20), dtype=bool), 1)
+    np.random.seed(0)
+    bonded = np.random.rand(20, 20, N_BINS)
+    bonded[upper, :] = bonded.transpose(1, 0, 2)[upper, :]
+    intra = np.random.rand(20, 20, N_BINS)
+    intra[upper, :] = intra.transpose(1, 0, 2)[upper, :]
+    inter = np.random.rand(20, 20, N_BINS)
+    inter[upper, :] = inter.transpose(1, 0, 2)[upper, :]
+    edges = np.sort(np.random.random(N_BINS))
+
+    ff = springcraft.TabulatedForceField(atoms, bonded, intra, inter, edges)
+
+    atoms.res_name[idx] = res_name
+    assert ff.update(idx, atoms[idx]) == expected
+
+    ff_new = springcraft.TabulatedForceField(atoms, bonded, intra, inter, edges)
+    pytest.approx(ff.interaction_matrix, ff_new.interaction_matrix)
+
+
+def test_tabulated_forcefield_update_checks(atoms):
+    """
+    Tests whether the input arguments are checked correctly.
+    """
+    ff = springcraft.TabulatedForceField(atoms, 1, 1, 1, None)
+    new_atom = atoms[0]
+    with pytest.raises(IndexError):
+        ff.update(-1, new_atom)
+    with pytest.raises(IndexError):
+        ff.update(len(atoms) + 1, new_atom)
+    with pytest.raises(TypeError):
+        ff.update(0, "LEU")
 
 
 def test_parameterfree_forcefield():
