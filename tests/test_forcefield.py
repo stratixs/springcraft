@@ -321,12 +321,13 @@ def test_tabulated_forcefield_distance(atoms):
 
 
 @pytest.mark.parametrize("cutoff_distance", [None, 7])
-def test_tabulated_forcefield_cutoff(atoms, cutoff_distance):
+def test_tabulated_forcefield_cutoff(atoms_singlechain, cutoff_distance):
     """
     Check whether a :class:`TabulatedForceField` with equal force
     constant for each pair of atoms result in a kirchhoff matrix,
     that simply represents adjacency.
     """
+    atoms = atoms_singlechain
     ff = springcraft.TabulatedForceField(atoms, 1, 1, 1, cutoff_distance)
     kirchhoff = springcraft.GNM(atoms, ff).kirchhoff
     ref_adj_matrix = -kirchhoff
