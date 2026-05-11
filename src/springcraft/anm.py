@@ -139,17 +139,19 @@ class ANM(ENM):
 
     @overload
     def eigen(
-        self, nzero: Literal[False] = False, copy: bool = True, tol: float = 1e-12
+        self, zero_mask: Literal[False] = False, copy: bool = True
     ) -> tuple[np.ndarray, np.ndarray]: ...
 
     @overload
     def eigen(
-        self, nzero: Literal[True], copy: bool = True, tol: float = 1e-12
-    ) -> tuple[np.ndarray, np.ndarray, int]: ...
+        self, zero_mask: Literal[True], copy: bool = True
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]: ...
 
     def eigen(
-        self, nzero=False, copy=True, tol=1e-12
-    ) -> Union[tuple[np.ndarray, np.ndarray], tuple[np.ndarray, np.ndarray, int]]:
+        self, zero_mask=False, copy=True
+    ) -> Union[
+        tuple[np.ndarray, np.ndarray], tuple[np.ndarray, np.ndarray, np.ndarray]
+    ]:
         """
         Compute or fetch the Eigenvalues and Eigenvectors of the
         *Hessian* matrix.
@@ -160,15 +162,12 @@ class ANM(ENM):
 
         Parameters
         ----------
-        nzero : bool, optional, default=False
-            Whether to return number of zero eigenvalues.
+        zero_mask : bool, optional, default=False
+            Whether to return a mask of non-zero eigenvalues.
         copy : bool, optional, default=True
             Whether to return the eigenvalues and eigenvectors as copies.
             If you choose not to return copies a modification to these
             values can reflect in incorrect behaviour of the class.
-        tol : float, optional, default=1e-10
-            Threshold for zero eigenvalues. All eigenvalues below this
-            value are set to 0.
 
         Returns
         -------
@@ -177,11 +176,12 @@ class ANM(ENM):
         eig_vectors : ndarray, shape=(k,n), dtype=float
             Eigenvectors of the *Hessian* matrix.
             ``eig_values[i]`` corresponds to ``eig_vectors[i]``.
-        nzero : int, optional
-            The number of zero eigenvalues. Only returned if ``nzero`` is set.
+        zero_mask : ndarray, shape(k,), dtype=bool, optional
+            The mask of non zero eigenvalues.
+            Only returned if ``zero_mask`` is set.
         """
         self.hessian
-        return super().eigen(nzero, copy, tol)
+        return super().eigen(zero_mask, copy)
 
     def normal_mode(
         self,
