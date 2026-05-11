@@ -121,6 +121,7 @@ class ANM(ENM):
                 f"got {value.shape}"
             )
         self._hessian = value
+
         # Invalidate dependent values
         self._covariance = None
         self._eigen_values = None

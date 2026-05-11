@@ -11,11 +11,11 @@ import biotite.structure as struc
 import numpy as np
 from typing_extensions import Literal, Union, overload, override
 
-from .enm import ENM
+from .enm_pert import ENMPert
 from .forcefield import ForceField
 
 
-class GNM(ENM):
+class GNM(ENMPert):
     """
     This class represents a *Gaussian Network Model*.
 
@@ -109,6 +109,7 @@ class GNM(ENM):
                 f"Expected shape {(self._natoms, self._natoms)}, got {value.shape}"
             )
         self._kirchhoff = value
+
         # Invalidate dependent values
         self._covariance = None
         self._eigen_values = None
@@ -185,3 +186,32 @@ class GNM(ENM):
     @override
     def _on_covariance_set(self):
         self._kirchhoff = None
+
+    @override
+    def _modify_contact_values(
+        self, atom_i: np.ndarray, atom_j: np.ndarray, delta: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        if np.issubdtype(delta.dtype, np.bool):
+            disp = struc.displacement(self._coord[atom_i], self._coord[atom_j])
+            sq_dist = (disp * disp).sum(axis=1)
+
+            mask_on = delta
+            if self._ff.cutoff_distance is not None:
+                mask_on &= sq_dist < self._ff.cutoff_distance**2
+            mask_off = ~delta
+
+            force_constants = np.zeros(delta.size)
+            force_constants[mask_on] = self._ff.force_constant(
+                atom_i[mask_on], atom_j[mask_on], sq_dist[mask_on]
+            )
+
+            delta = np.select(
+                [mask_on, mask_off],
+                [
+                    -(force_constants + self._interactions[atom_i, atom_j]),  # pyright: ignore[reportOptionalSubscript]
+                    -self._interactions[atom_i, atom_j],  # pyright: ignore[reportOptionalSubscript]
+                ],
+                default=0,
+            )
+
+        return atom_i, atom_j, delta

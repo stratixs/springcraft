@@ -67,14 +67,24 @@ class ENM(ABC):
         The mass for each atom, `None` if no mass weighting is applied.
     """
 
+    # istores squared distances between atoms if below the ff cutoff distance, otherwise 0
+    _adjacency: np.ndarray | None
+    # euclidean coordinates of each atom
     _coord: np.ndarray
+    # pseudo-inverse of the _interaction matrix
     _covariance: np.ndarray | None
+    # eigenvalues/-vectors of the _interaction matrix
     _eigen_values: np.ndarray | None
     _eigen_vectors: np.ndarray | None
+    # ForceField defining the atom interactions
     _ff: ForceField
+    # atom masses
     _masses: np.ndarray | None
+    # the mass weight matrix is used to weigh the _interactions matrix
     _masses_weight_matrix: np.ndarray | None
+    # the number of atoms
     _natoms: int
+    # whether to use an optimized algorithm to calculate the _interaction matrix
     _use_cell_list: bool
 
     def __init__(
@@ -141,6 +151,8 @@ class ENM(ABC):
         if value.shape != (length, length):
             raise IndexError(f"Expected shape {(length, length)}, got {value.shape}")
         self._covariance = value
+
+        # invalidate dependant values
         self._eigen_values = None
         self._eigen_vectors = None
 
@@ -207,7 +219,7 @@ class ENM(ABC):
 
         if zero_mask:
             threshhold = 1e-12 * self._eigen_values[-1]  # max(eig_val) * 10^-12
-            mask = self._eigen_values > threshhold
+            mask = np.abs(self._eigen_values) > threshhold
             return val, vec, mask
 
         return val, vec
