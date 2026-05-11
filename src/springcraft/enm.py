@@ -127,10 +127,9 @@ class ENM(ABC):
         if self._covariance is None:
             # same algorithm as linalg.pinv
             # but we want to store calculates eigenvalues in the process
-            s, u, nzero = self.eigen(nzero=True, copy=False)
+            s, u, zero_mask = self.eigen(zero_mask=True, copy=False)
 
-            si = np.zeros_like(s)
-            si[nzero:] = 1 / s[nzero:]
+            si = np.divide(1, s, where=zero_mask, out=np.zeros_like(s))
 
             self._covariance = u.T @ np.multiply(si[..., np.newaxis], u)
 
@@ -154,17 +153,19 @@ class ENM(ABC):
 
     @overload
     def eigen(
-        self, nzero: Literal[False] = False, copy: bool = True, tol: float = 1e-12
+        self, zero_mask: Literal[False] = False, copy: bool = True
     ) -> tuple[np.ndarray, np.ndarray]: ...
 
     @overload
     def eigen(
-        self, nzero: Literal[True], copy: bool = True, tol: float = 1e-12
-    ) -> tuple[np.ndarray, np.ndarray, int]: ...
+        self, zero_mask: Literal[True], copy: bool = True
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]: ...
 
     def eigen(
-        self, nzero=False, copy=True, tol=1e-12
-    ) -> Union[tuple[np.ndarray, np.ndarray], tuple[np.ndarray, np.ndarray, int]]:
+        self, zero_mask=False, copy=True
+    ) -> Union[
+        tuple[np.ndarray, np.ndarray], tuple[np.ndarray, np.ndarray, np.ndarray]
+    ]:
         """
         Compute or fetch the Eigenvalues and Eigenvectors of the
         *interaction* matrix.
@@ -175,15 +176,12 @@ class ENM(ABC):
 
         Parameters
         ----------
-        nzero : bool, optional, default=False
-            Whether to return number of zero eigenvalues.
+        zero_mask : bool, optional, default=False
+            Whether to return a mask of non-zero eigenvalues.
         copy : bool, optional, default=True
             Whether to return the eigenvalues and eigenvectors as copies.
             If you choose not to return copies a modification to these
             values can reflect in incorrect behaviour of the class.
-        tol : float, optional, default=1e-10
-            Threshold for zero eigenvalues. All eigenvalues below this
-            value are set to 0.
 
         Returns
         -------
@@ -192,22 +190,14 @@ class ENM(ABC):
         eig_vectors : ndarray, shape=(k,n), dtype=float
             Eigenvectors of the matrix.
             ``eig_values[i]`` corresponds to ``eigenvectors[i]``.
-        nzero : int, optional
-            The number of zero eigenvalues. Only returned if ``nzero`` is set.
+        zero_mask : ndarray, shape(k,), dtype=bool, optional
+            The mask of non zero eigenvalues.
+            Only returned if ``zero_mask`` is set.
         """
         if self._eigen_values is None or self._eigen_vectors is None:
             assert self._interactions is not None  # should never happen
 
             self._eigen_values, self._eigen_vectors = np.linalg.eigh(self._interactions)
-
-            self._eigen_values_nzero = len(self._eigen_values)
-            i = 0
-            while i < self._eigen_values_nzero:
-                if self._eigen_values[i] > tol:
-                    self._eigen_values_nzero = i
-                    break
-                i = i + 1
-            self._eigen_values[: self._eigen_values_nzero] = 0
 
         val = self._eigen_values
         vec = self._eigen_vectors.T
@@ -215,8 +205,11 @@ class ENM(ABC):
             val = val.copy()
             vec = vec.copy()
 
-        if nzero:
-            return val, vec, self._eigen_values_nzero
+        if zero_mask:
+            threshhold = 1e-12 * self._eigen_values[-1]  # max(eig_val) * 10^-12
+            mask = self._eigen_values > threshhold
+            return val, vec, mask
+
         return val, vec
 
     def frequencies(self) -> np.ndarray:
