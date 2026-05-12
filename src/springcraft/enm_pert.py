@@ -110,11 +110,32 @@ class ENMPert(ENM):
         if delta.size == 1:
             delta = np.repeat(delta, atom_i.size)
 
-        idx_i, idx_j, delta = self._modify_contact_values(atom_i, atom_j, delta)
+        if np.issubdtype(delta.dtype, np.bool):
+            disp = struc.displacement(self._coord[atom_i], self._coord[atom_j])
+            sq_dist = (disp * disp).sum(axis=1)
+
+            mask_on = delta
+            if self._ff.cutoff_distance is not None:
+                mask_on &= sq_dist < self._ff.cutoff_distance**2
+            mask_off = ~delta
+
+            force_constants = np.zeros(delta.size)
+            force_constants[mask_on] = self._ff.force_constant(
+                atom_i[mask_on], atom_j[mask_on], sq_dist[mask_on]
+            )
+
+            delta = np.select(
+                [mask_on, mask_off],
+                [
+                    -(force_constants + self._interactions[atom_i, atom_j]),  # pyright: ignore[reportOptionalSubscript]
+                    -self._interactions[atom_i, atom_j],  # pyright: ignore[reportOptionalSubscript]
+                ],
+                default=0,
+            )
 
         non_zero_mask = abs(delta) > 1e-8
         self._modify_contact_pair(
-            idx_i[non_zero_mask], idx_j[non_zero_mask], delta[non_zero_mask]
+            atom_i[non_zero_mask], atom_j[non_zero_mask], delta[non_zero_mask]
         )
 
     def modify_atom(self, atom_i, new_atom, skip_checks=False):
@@ -179,40 +200,14 @@ class ENMPert(ENM):
             np.repeat(atom_i, length - 1), atom_j, delta, skip_checks=True
         )
 
-    @abstractmethod
-    def _modify_contact_values(
-        self, atom_i: np.ndarray, atom_j: np.ndarray, delta: np.ndarray
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """
-        Helper method to calculate the changes that need to be made to
-        the `interaction` matrix when changing the strength of a contact
-        between atoms.
-
-        As this is a private function, no input checks are performed.
-
-        Parameters
-        ----------
-        atom_i : ndarray, shape=(k,), dtype=int
-            First atom index
-        atom_j : ndarray, shape=(k,), dtype=int
-            Second atom index with ``atom_i[idx] != atom_j[idx]``
-        delta : ndarray, shape=(k,), dtype=(float or bool)
-            The amount by which the interaction strength between
-            atom i and j gets changed in the `interaction` matrix.
-            True sets to initial value, False to 0. Must not be 0.
-
-        Returns
-        -------
-        idx_i : ndarray, shape=(k * dof,), dtype=int
-            First interaction index
-        idx_j : ndarray, shape=(k * dof,), dtype=int
-            Second interaction index
-        delta : ndarray, shape=(k * dof,), dtype=float
-            The amount to change.
-        """
-        pass  # pragma: no cover
-
-    def _modify_contact_pair(self, atom_i, atom_j, deltas, tem=None, tem_factors=K_B):
+    def _modify_contact_pair(
+        self,
+        atom_i: np.ndarray,
+        atom_j: np.ndarray,
+        deltas: np.ndarray,
+        tem: float | None = None,
+        tem_factors=K_B,
+    ):
         """
         Modifies the interaction strengths between the atoms i and j
         in the `interaction` matrix. Requires for the `interaction` matrix
@@ -247,39 +242,50 @@ class ENMPert(ENM):
         """
         for i, j, delta in np.nditer([atom_i, atom_j, deltas]):
             if self._covariance is not None:
-                x = self._covariance[i, :] - self._covariance[j, :]
-                beta = 1 + delta * (x[j] - x[i])
-                print("beta: ", beta)
+                x, eta = self._modify_contact_pair_vector(i, j)  # pyright: ignore[reportArgumentType]
+                beta = 1 + delta * eta
 
                 if np.abs(beta) < 1e-10:  # TODO use relative instead of absolute diff?
-                    self._modify_contact_pair_rank_decrease(x)
+                    self._modify_contact_pair_covariance_rank_decrease(x)
                 elif np.abs(self._covariance[i, j]) < 1e-10:  # TODO mathematical proof
-                    self._modify_contact_pair_rank_increase(i, j, delta, x, beta)
+                    self._modify_contact_pair_covariance_rank_increase(
+                        i, j, delta, x, beta
+                    )
                 else:
                     # default case
-                    self._covariance += np.outer(x * delta / beta, x)
+                    self._modify_contact_pair_covariance(x, delta, beta)  # pyright: ignore[reportArgumentType]
 
-            self._interactions[i, j] += delta  # pyright: ignore[reportOptionalSubscript]
-            self._interactions[j, i] += delta  # pyright: ignore[reportOptionalSubscript]
-            self._interactions[i, i] -= delta  # pyright: ignore[reportOptionalSubscript]
-            self._interactions[j, j] -= delta  # pyright: ignore[reportOptionalSubscript]
-
-            print(
-                "maxdiff: ",
-                np.max(
-                    np.abs(
-                        self._interactions
-                        - self._interactions @ self._covariance @ self._interactions
-                    )
-                ),
-            )
-
-            # TODO can we make it faster, if we only compute the upper triangle?
+            self._modify_contact_pair_interaction(i, j, delta)  # pyright: ignore[reportArgumentType]
 
         self._eig_values = None
         self._eig_vectors = None
 
-    def _modify_contact_pair_rank_decrease(self, x):
+    @abstractmethod
+    def _modify_contact_pair_vector(
+        self, atom_i: int, atom_j: int
+    ) -> tuple[np.ndarray, float]:
+        r"""
+        If the one-rank update to the interaction matrix A is described by
+
+        .. math::
+
+            A_\text{mod} = A - \delta \cdot \vec{u} \vec{u}^T
+
+        where :math:'\vec{u} is a vector than this function calculates
+
+        .. math::
+
+            x = A^{-1} \cdot \vec{u} = \vec{u}^T \cdot A^{-1} \\
+            \varepsilon = - \vec{u}^T \cdot A^{-1} \cdot \vec{u}
+
+        where :math;'()^{-1}' describes the pseudo-inverse
+        """
+        pass  # pragma: no cover
+
+    def _modify_contact_pair_covariance(self, x: np.ndarray, delta: float, beta: float):
+        self._covariance += np.outer(x * delta / beta, x)  # pyright: ignore[reportOperatorIssue]
+
+    def _modify_contact_pair_covariance_rank_decrease(self, x):
         cov_mul_diff = np.matvec(self._covariance, x)  # pyright: ignore[reportArgumentType]
         x_norm_sq = np.inner(x, x)
 
@@ -289,7 +295,7 @@ class ENMPert(ENM):
 
         self._covariance += dd_mul_cov + dd_mul_cov.T + k_cov_h_mul_kh
 
-    def _modify_contact_pair_rank_increase(self, i, j, delta, x, beta):
+    def _modify_contact_pair_covariance_rank_increase(self, i, j, delta, x, beta):
         y = -np.matvec(self._interactions, x)  # pyright: ignore[reportArgumentType]
         y[i] += 1
         y[j] -= 1
@@ -299,3 +305,14 @@ class ENMPert(ENM):
         beta_y_y = np.outer(y * beta / (-delta * y_norm_sq * y_norm_sq), y)
 
         self._covariance += x_y + x_y.T + beta_y_y
+
+    @abstractmethod
+    def _modify_contact_pair_interaction(self, atom_i: int, atom_j: int, delta: float):
+        """
+        Performs a one-rank permutation to the `interaction` matrix.
+        The permutation describes a change in the force constance between
+        atoms `atom_i` and `atom_j` by `delta`.
+
+        The `interaction` matrix must exists.
+        """
+        pass

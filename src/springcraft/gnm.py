@@ -188,30 +188,16 @@ class GNM(ENMPert):
         self._kirchhoff = None
 
     @override
-    def _modify_contact_values(
-        self, atom_i: np.ndarray, atom_j: np.ndarray, delta: np.ndarray
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        if np.issubdtype(delta.dtype, np.bool):
-            disp = struc.displacement(self._coord[atom_i], self._coord[atom_j])
-            sq_dist = (disp * disp).sum(axis=1)
+    def _modify_contact_pair_vector(
+        self, atom_i: int, atom_j: int
+    ) -> tuple[np.ndarray, float]:
+        x = self._covariance[atom_i, :] - self._covariance[atom_j, :]  # pyright: ignore[reportOptionalSubscript]
+        eps = x[atom_j] - x[atom_i]
+        return x, eps
 
-            mask_on = delta
-            if self._ff.cutoff_distance is not None:
-                mask_on &= sq_dist < self._ff.cutoff_distance**2
-            mask_off = ~delta
-
-            force_constants = np.zeros(delta.size)
-            force_constants[mask_on] = self._ff.force_constant(
-                atom_i[mask_on], atom_j[mask_on], sq_dist[mask_on]
-            )
-
-            delta = np.select(
-                [mask_on, mask_off],
-                [
-                    -(force_constants + self._interactions[atom_i, atom_j]),  # pyright: ignore[reportOptionalSubscript]
-                    -self._interactions[atom_i, atom_j],  # pyright: ignore[reportOptionalSubscript]
-                ],
-                default=0,
-            )
-
-        return atom_i, atom_j, delta
+    @override
+    def _modify_contact_pair_interaction(self, atom_i: int, atom_j: int, delta: float):
+        self._kirchhoff[atom_i, atom_j] += delta  # pyright: ignore[reportOptionalSubscript]
+        self._kirchhoff[atom_j, atom_i] += delta  # pyright: ignore[reportOptionalSubscript]
+        self._kirchhoff[atom_i, atom_i] -= delta  # pyright: ignore[reportOptionalSubscript]
+        self._kirchhoff[atom_j, atom_j] -= delta  # pyright: ignore[reportOptionalSubscript]

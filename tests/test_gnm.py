@@ -11,7 +11,7 @@ from biotite.structure import AtomArray
 
 import springcraft
 
-from .util import data_dir
+from .util import ModifiedForceField, data_dir
 
 
 def prepare_gnm(file_path, cutoff):
@@ -412,7 +412,7 @@ def test_fluctuation_dcc(file_path, cutoff):
     assert np.allclose(test_dcc_absolute, reference_dcc_absolute)
 
 
-@pytest.mark.parametrize("nb_of_changes", [1, 3, 20, 27])
+@pytest.mark.parametrize("nb_of_changes", [1, 3, 20, 27, 200])
 def test_modify_contact_pair(nb_of_changes):
     """
     Tests whether permutations to the `kirchhoff` matrix are
@@ -431,25 +431,21 @@ def test_modify_contact_pair(nb_of_changes):
     ca = atoms[(atoms.atom_name == "CA") & (atoms.element == "C")]
     ff = springcraft.InvariantForceField(7.9)
 
-    gnm = springcraft.GNM(ca, ff)
-    ref_kirchhoff = gnm.kirchhoff.copy()
-    gnm.covariance
-
     rng = np.random.default_rng(0)
-    atom_i, atom_j = np.zeros((2, nb_of_changes), dtype=int)
-    delta = (rng.random(nb_of_changes) + 0.5) * rng.choice((-1, 1), nb_of_changes)
-    for k in range(nb_of_changes):
-        atom_i[k], atom_j[k] = rng.choice(len(ca), size=2, replace=False)
+    atom_i = rng.integers(0, len(ca), size=nb_of_changes)
+    offsets = rng.integers(1, len(ca), size=nb_of_changes)
+    atom_j = (atom_i + offsets) % len(ca)
+    delta = rng.random(nb_of_changes) * 2 - 1
 
-        ref_kirchhoff[atom_i[k], atom_j[k]] += delta[k]
-        ref_kirchhoff[atom_j[k], atom_i[k]] += delta[k]
-        ref_kirchhoff[atom_i[k], atom_i[k]] -= delta[k]
-        ref_kirchhoff[atom_j[k], atom_j[k]] -= delta[k]
-
-    ref_gnm = springcraft.GNM(ca, ff)
-    ref_gnm.kirchhoff = ref_kirchhoff
+    ref_ff = ModifiedForceField(ff, len(ca), atom_i, atom_j, delta)
+    ref_gnm = springcraft.GNM(ca, ref_ff)
+    ref_kirchhoff = ref_gnm.kirchhoff
     ref_covariance = ref_gnm.covariance
 
+    gnm = springcraft.GNM(ca, ff)
+    gnm.kirchhoff
+    gnm.covariance
+    assert gnm._covariance is not None
     gnm._modify_contact_pair(atom_i, atom_j, delta)
     mod_kirchhoff = gnm.kirchhoff
     mod_covariance = gnm.covariance
@@ -478,33 +474,37 @@ def test_modify_contact(atom_i, atom_j, delta, expected_kirchhoff_change):
     ca = atoms[(atoms.atom_name == "CA") & (atoms.element == "C")]
     ff = springcraft.TabulatedForceField.d_enm(ca)
 
+    np.set_printoptions(precision=4, suppress=True, linewidth=300)
+
     gnm = springcraft.GNM(ca, ff)
-    ref_kirchhoff = gnm.kirchhoff
-    ref_kirchhoff[3, 7] -= 2.4
-    ref_kirchhoff[15, 18] += 11.7
-    ref_kirchhoff[8, 11] += 1e-9
-    ref_kirchhoff = ref_kirchhoff.copy()
+    print(gnm.kirchhoff)
+
+    idx_i = np.array([3, 15, 8])
+    idx_j = np.array([7, 18, 11])
+    val = np.array([-2.4, 11.7, 1e-9])
+    init_ff = ModifiedForceField(ff, len(ca), idx_i, idx_j, val)
+    init_gnm = springcraft.GNM(ca, init_ff)
+    init_kirchhoff = init_gnm.kirchhoff
+
+    gnm = springcraft.GNM(ca, ff)
+    gnm.kirchhoff = init_kirchhoff
     gnm.covariance
-
-    if type(atom_i) is list:
-        for i, j, d in zip(atom_i, atom_j, expected_kirchhoff_change):
-            ref_kirchhoff[i, j] += d
-            ref_kirchhoff[j, i] += d
-            ref_kirchhoff[i, i] -= d
-            ref_kirchhoff[j, j] -= d
-    else:
-        ref_kirchhoff[atom_i, atom_j] += expected_kirchhoff_change
-        ref_kirchhoff[atom_j, atom_i] += expected_kirchhoff_change
-        ref_kirchhoff[atom_i, atom_i] -= expected_kirchhoff_change
-        ref_kirchhoff[atom_j, atom_j] -= expected_kirchhoff_change
-
-    ref_gnm = springcraft.GNM(ca, ff)
-    ref_gnm.kirchhoff = ref_kirchhoff
-    ref_covariance = ref_gnm.covariance
-
+    assert gnm._covariance is not None
     gnm.modify_contact(atom_i, atom_j, delta)
     mod_kirchhoff = gnm.kirchhoff
     mod_covariance = gnm.covariance
+
+    if not hasattr(atom_i, "__iter__"):
+        atom_i = [atom_i]
+        atom_j = [atom_j]
+        expected_kirchhoff_change = [expected_kirchhoff_change]
+    idx_i = np.concatenate([idx_i, atom_i])
+    idx_j = np.concatenate([idx_j, atom_j])
+    val = np.concatenate([val, expected_kirchhoff_change])
+    ref_ff = ModifiedForceField(ff, len(ca), idx_i, idx_j, val)
+    ref_gnm = springcraft.GNM(ca, ref_ff)
+    ref_kirchhoff = ref_gnm.kirchhoff
+    ref_covariance = ref_gnm.covariance
 
     assert np.allclose(mod_kirchhoff, ref_kirchhoff)
     assert np.allclose(mod_covariance, ref_covariance)
