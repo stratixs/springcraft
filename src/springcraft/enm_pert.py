@@ -11,6 +11,7 @@ from abc import abstractmethod
 
 import biotite.structure as struc
 import numpy as np
+from scipy.linalg import blas
 
 from springcraft.enm import ENM, K_B
 
@@ -242,67 +243,44 @@ class ENMPert(ENM):
         """
         for i, j, delta in np.nditer([atom_i, atom_j, deltas]):
             if self._covariance is not None:
-                x, eta = self._modify_contact_pair_vector(i, j)  # pyright: ignore[reportArgumentType]
-                beta = 1 + delta * eta
+                self._modify_contact_pair_covariance(i, j, delta)
 
-                if np.abs(beta) < 1e-10:  # TODO use relative instead of absolute diff?
-                    self._modify_contact_pair_covariance_rank_decrease(x)
-                elif np.abs(self._covariance[i, j]) < 1e-10:  # TODO mathematical proof
-                    self._modify_contact_pair_covariance_rank_increase(
-                        i, j, delta, x, beta
-                    )
-                else:
-                    # default case
-                    self._modify_contact_pair_covariance(x, delta, beta)  # pyright: ignore[reportArgumentType]
-
-            self._modify_contact_pair_interaction(i, j, delta)  # pyright: ignore[reportArgumentType]
+            self._modify_contact_pair_interaction(i, j, delta)
 
         self._eig_values = None
         self._eig_vectors = None
 
-    @abstractmethod
-    def _modify_contact_pair_vector(
-        self, atom_i: int, atom_j: int
-    ) -> tuple[np.ndarray, float]:
-        r"""
-        If the one-rank update to the interaction matrix A is described by
+    def _modify_contact_pair_covariance(self, atom_i: int, atom_j: int, delta: float):
+        x = self._covariance[atom_i, :] - self._covariance[atom_j, :]
+        beta = 1 + delta * (x[atom_j] - x[atom_i])
 
-        .. math::
-
-            A_\text{mod} = A - \delta \cdot \vec{u} \vec{u}^T
-
-        where :math:'\vec{u} is a vector than this function calculates
-
-        .. math::
-
-            x = A^{-1} \cdot \vec{u} = \vec{u}^T \cdot A^{-1} \\
-            \varepsilon = - \vec{u}^T \cdot A^{-1} \cdot \vec{u}
-
-        where :math;'()^{-1}' describes the pseudo-inverse
-        """
-        pass  # pragma: no cover
-
-    def _modify_contact_pair_covariance(self, x: np.ndarray, delta: float, beta: float):
-        self._covariance += np.outer(x * delta / beta, x)  # pyright: ignore[reportOperatorIssue]
+        t = np.matvec(self._kirchhoff, x)
+        if np.abs(beta) < 1e-10:
+            self._modify_contact_pair_covariance_rank_decrease(x)
+        elif np.abs(t[atom_i] + t[atom_j]) > 1e-10:
+            y = -np.matvec(self._interactions, x)
+            y[atom_i] += 1
+            y[atom_j] -= 1
+            self._modify_contact_pair_covariance_rank_increase(x, y, beta, delta)
+        else:
+            # default case: A + alpha * u * u.T
+            ger = blas.get_blas_funcs("ger", (self._covariance, x))
+            ger(alpha=delta / beta, x=x, y=x, a=self._covariance.T, overwrite_a=True)
 
     def _modify_contact_pair_covariance_rank_decrease(self, x):
-        cov_mul_diff = np.matvec(self._covariance, x)  # pyright: ignore[reportArgumentType]
-        x_norm_sq = np.inner(x, x)
+        cov_mul_diff = np.matvec(self._covariance, x)
+        x_dot = np.inner(x, x)
 
-        dd_mul_cov = np.outer(x / -x_norm_sq, cov_mul_diff)
-        alpha = np.inner(x, cov_mul_diff) / (x_norm_sq * x_norm_sq)
+        dd_mul_cov = np.outer(x / -x_dot, cov_mul_diff)
+        alpha = np.inner(x, cov_mul_diff) / (x_dot * x_dot)
         k_cov_h_mul_kh = np.outer(alpha * x, x)
 
         self._covariance += dd_mul_cov + dd_mul_cov.T + k_cov_h_mul_kh
 
-    def _modify_contact_pair_covariance_rank_increase(self, i, j, delta, x, beta):
-        y = -np.matvec(self._interactions, x)  # pyright: ignore[reportArgumentType]
-        y[i] += 1
-        y[j] -= 1
-
-        y_norm_sq = np.inner(y, y)
-        x_y = np.outer(x / -y_norm_sq, y)
-        beta_y_y = np.outer(y * beta / (-delta * y_norm_sq * y_norm_sq), y)
+    def _modify_contact_pair_covariance_rank_increase(self, x, y, beta, delta):
+        y_dot = np.inner(y, y)
+        x_y = np.outer(x / -y_dot, y)
+        beta_y_y = np.outer(y * beta / (-delta * y_dot * y_dot), y)
 
         self._covariance += x_y + x_y.T + beta_y_y
 
