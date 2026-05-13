@@ -188,6 +188,22 @@ class GNM(ENMPert):
         self._kirchhoff = None
 
     @override
+    def _modify_contact_pair_covariance(self, atom_i: int, atom_j: int, delta: float):
+        x = self._covariance[atom_i, :] - self._covariance[atom_j, :]
+        beta = 1 + delta * (x[atom_j] - x[atom_i])
+
+        if np.abs(beta) < 1e-10:
+            self._modify_contact_pair_covariance_rank_decrease(x)
+        elif np.abs((self._kirchhoff[atom_i] + self._kirchhoff[atom_j]) @ x) > 1e-10:
+            y = -np.matvec(self._interactions, x)
+            y[atom_i] += 1
+            y[atom_j] -= 1
+            self._modify_contact_pair_covariance_rank_increase(x, y, beta, delta)
+        else:
+            # default case: A + alpha * u * u.T
+            self._modify_contact_pair_covariance_rank_unchanged(x, delta, beta)
+
+    @override
     def _modify_contact_pair_interaction(self, atom_i: int, atom_j: int, delta: float):
         self._kirchhoff[atom_i, atom_j] += delta  # pyright: ignore[reportOptionalSubscript]
         self._kirchhoff[atom_j, atom_i] += delta  # pyright: ignore[reportOptionalSubscript]

@@ -15,6 +15,8 @@ from scipy.linalg import blas
 
 from springcraft.enm import ENM, K_B
 
+ger = blas.get_blas_funcs("ger", dtype=np.float64)
+
 
 class ENMPert(ENM):
     def modify_contact(self, atom_i, atom_j, delta, skip_checks=False):
@@ -250,39 +252,38 @@ class ENMPert(ENM):
         self._eig_values = None
         self._eig_vectors = None
 
+    @abstractmethod
     def _modify_contact_pair_covariance(self, atom_i: int, atom_j: int, delta: float):
-        x = self._covariance[atom_i, :] - self._covariance[atom_j, :]
-        beta = 1 + delta * (x[atom_j] - x[atom_i])
+        pass
 
-        t = np.matvec(self._kirchhoff, x)
-        if np.abs(beta) < 1e-10:
-            self._modify_contact_pair_covariance_rank_decrease(x)
-        elif np.abs(t[atom_i] + t[atom_j]) > 1e-10:
-            y = -np.matvec(self._interactions, x)
-            y[atom_i] += 1
-            y[atom_j] -= 1
-            self._modify_contact_pair_covariance_rank_increase(x, y, beta, delta)
-        else:
-            # default case: A + alpha * u * u.T
-            ger = blas.get_blas_funcs("ger", (self._covariance, x))
-            ger(alpha=delta / beta, x=x, y=x, a=self._covariance.T, overwrite_a=True)
+    def _modify_contact_pair_covariance_rank_unchanged(self, x, delta, beta):
+        ger(alpha=delta / beta, x=x, y=x, a=self._covariance.T, overwrite_a=True)
 
     def _modify_contact_pair_covariance_rank_decrease(self, x):
         cov_mul_diff = np.matvec(self._covariance, x)
-        x_dot = np.inner(x, x)
+        x_dot = np.dot(x, x)
 
-        dd_mul_cov = np.outer(x / -x_dot, cov_mul_diff)
-        alpha = np.inner(x, cov_mul_diff) / (x_dot * x_dot)
-        k_cov_h_mul_kh = np.outer(alpha * x, x)
-
-        self._covariance += dd_mul_cov + dd_mul_cov.T + k_cov_h_mul_kh
+        alpha = np.dot(x, cov_mul_diff) / (x_dot * x_dot)
+        # fmt: off
+        ger(alpha=1/-x_dot, x=x, y=cov_mul_diff, a=self._covariance.T, overwrite_a=True)
+        ger(alpha=1/-x_dot, x=cov_mul_diff, y=x, a=self._covariance.T, overwrite_a=True)
+        ger(alpha=alpha, x=x, y=x, a=self._covariance.T, overwrite_a=True)
+        # fmt: on
+        # dd_mul_cov = np.einsum("i,j->ij", x / -x_dot, cov_mul_diff)
+        # k_cov_h_mul_kh = np.einsum("i,j->ij", alpha * x, x)
+        # self._covariance += dd_mul_cov + dd_mul_cov.T + k_cov_h_mul_kh
 
     def _modify_contact_pair_covariance_rank_increase(self, x, y, beta, delta):
-        y_dot = np.inner(y, y)
-        x_y = np.outer(x / -y_dot, y)
-        beta_y_y = np.outer(y * beta / (-delta * y_dot * y_dot), y)
+        y_dot = np.dot(y, y)
+        # fmt: off
+        ger(alpha=1/-y_dot, x=x, y=y, a=self._covariance.T, overwrite_a=True)
+        ger(alpha=1/-y_dot, x=y, y=x, a=self._covariance.T, overwrite_a=True)
+        ger(alpha=beta/(-delta * y_dot * y_dot), x=y, y=y, a=self._covariance.T, overwrite_a=True)
+        # fmt: on
 
-        self._covariance += x_y + x_y.T + beta_y_y
+        # x_y = np.einsum("i,j->ij", x / -y_dot, y)
+        # beta_y_y = np.einsum("i,j->ij", y * beta / (-delta * y_dot * y_dot), y)
+        # self._covariance += x_y + x_y.T + beta_y_y
 
     @abstractmethod
     def _modify_contact_pair_interaction(self, atom_i: int, atom_j: int, delta: float):
