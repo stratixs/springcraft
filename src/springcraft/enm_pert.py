@@ -208,8 +208,6 @@ class ENMPert(ENM):
         atom_i: np.ndarray,
         atom_j: np.ndarray,
         deltas: np.ndarray,
-        tem: float | None = None,
-        tem_factors=K_B,
     ):
         """
         Modifies the interaction strengths between the atoms i and j
@@ -262,7 +260,6 @@ class ENMPert(ENM):
     def _modify_contact_pair_covariance_rank_decrease(self, x):
         cov_mul_diff = np.matvec(self._covariance, x)
         x_dot = np.dot(x, x)
-
         alpha = np.dot(x, cov_mul_diff) / (x_dot * x_dot)
         # fmt: off
         ger(alpha=1/-x_dot, x=x, y=cov_mul_diff, a=self._covariance.T, overwrite_a=True)

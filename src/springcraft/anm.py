@@ -12,11 +12,11 @@ import numpy as np
 from typing_extensions import Literal, Union, overload, override
 
 from . import nma
-from .enm import ENM
+from .enm_pert import ENMPert
 from .forcefield import ForceField
 
 
-class ANM(ENM):
+class ANM(ENMPert):
     """
     This class represents an *Anisotropic Network Model*.
 
@@ -343,3 +343,51 @@ class ANM(ENM):
     @override
     def _on_covariance_set(self):
         self._hessian = None
+
+    @override
+    def _modify_contact_pair_covariance(self, atom_i: int, atom_j: int, delta: float):
+        dof = self.dof_per_node
+        slice_i = slice(atom_i * dof, (atom_i + 1) * dof)
+        slice_j = slice(atom_j * dof, (atom_j + 1) * dof)
+
+        disp = struc.displacement(self._coord[atom_i], self._coord[atom_j])
+        disp_norm = disp / np.linalg.vector_norm(disp)
+
+        x = (
+            disp_norm @ self._covariance[slice_i, :]
+            - disp_norm @ self._covariance[slice_j, :]
+        )
+        eps = np.dot(disp_norm, x[slice_j] - x[slice_i])
+        beta = 1 + delta * eps
+
+        t = self._hessian[slice_j] @ x + self._hessian[slice_i] @ x
+        if np.abs(beta) < 1e-10:
+            raise ValueError(
+                "One-rank permutation would lead to rank increase and is therefor not possible."
+            )
+            # self._modify_contact_pair_covariance_rank_decrease(x)
+        elif np.linalg.norm(t, ord=np.inf) > 1e-6:
+            raise ValueError(
+                "One-rank permutation would lead to rank decrease and is therefor not possible."
+            )
+            # y = -self._hessian @ x
+            # y[slice_i] += disp_norm
+            # y[slice_j] -= disp_norm
+            # self._modify_contact_pair_covariance_rank_increase(x, y, beta, delta)
+        else:
+            # default case: A + alpha * u * u.T
+            self._modify_contact_pair_covariance_rank_unchanged(x, delta, beta)
+
+    @override
+    def _modify_contact_pair_interaction(self, atom_i: int, atom_j: int, delta: float):
+        dof = self.dof_per_node
+        slice_i = slice(atom_i * dof, (atom_i + 1) * dof)
+        slice_j = slice(atom_j * dof, (atom_j + 1) * dof)
+
+        disp = struc.displacement(self._coord[atom_i], self._coord[atom_j])
+        tensor = np.outer(disp, disp * (delta / (disp @ disp)))
+
+        self._hessian[slice_i, slice_j] += tensor  # pyright: ignore[reportOptionalSubscript]
+        self._hessian[slice_j, slice_i] += tensor  # pyright: ignore[reportOptionalSubscript]
+        self._hessian[slice_i, slice_i] -= tensor  # pyright: ignore[reportOptionalSubscript]
+        self._hessian[slice_j, slice_j] -= tensor  # pyright: ignore[reportOptionalSubscript]
