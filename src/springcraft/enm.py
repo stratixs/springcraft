@@ -157,6 +157,16 @@ class ENM(ABC):
         self._on_covariance_set()
 
     @property
+    def has_covariance(self) -> bool:
+        """
+        Returns
+        -------
+        has_covariance : bool
+            Whether the covariance is already calculated.
+        """
+        return self._covariance is not None
+
+    @property
     @abstractmethod
     def dof_per_node(self) -> int:
         pass  # pragma: no cover
