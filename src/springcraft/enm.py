@@ -13,8 +13,8 @@ import biotite.structure.info as strucinfo
 import numpy as np
 from typing_extensions import Literal, Union, overload
 
-from . import nma
-from .forcefield import ForceField
+from springcraft import nma
+from springcraft.forcefield import ForceField
 
 K_B = 1.380649e-23
 N_A = 6.02214076e23

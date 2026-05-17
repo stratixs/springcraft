@@ -13,7 +13,7 @@ import biotite.structure as struc
 import numpy as np
 from scipy.linalg import blas
 
-from springcraft.enm import ENM, K_B
+from springcraft.enm import ENM
 
 ger = blas.get_blas_funcs("ger", dtype=np.float64)
 

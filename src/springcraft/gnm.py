@@ -11,8 +11,8 @@ import biotite.structure as struc
 import numpy as np
 from typing_extensions import Literal, Union, overload, override
 
-from .enm_pert import ENMPert
-from .forcefield import ForceField
+from springcraft.enm_pert import ENMPert
+from springcraft.forcefield import ForceField
 
 
 class GNM(ENMPert):
