@@ -186,6 +186,19 @@ def test_patched_force_field_pairs_on(atoms):
     assert np.all(test_kirchhoff_2 == ref_kirchhoff_2)
 
 
+def test_invariant_force_field(atoms):
+    "Tests whether the basic InvariantForceField works."
+    N_CONTACTS = 5
+    CUTOFF_DIST = 7.0
+
+    ff = springcraft.InvariantForceField(CUTOFF_DIST)
+    force_constants = ff.force_constant(
+        np.arange(N_CONTACTS), np.arange(N_CONTACTS), np.arange(N_CONTACTS)
+    )
+    assert np.all(force_constants == np.ones(N_CONTACTS))
+    assert ff.cutoff_distance == CUTOFF_DIST
+
+
 def test_tabulated_forcefield_homogeneous(atoms):
     """
     Check contents of position-specifc interaction matrix, where the

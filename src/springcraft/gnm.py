@@ -11,8 +11,8 @@ import biotite.structure as struc
 import numpy as np
 from typing_extensions import Literal, Union, overload, override
 
-from .enm import ENM
-from .forcefield import ForceField
+from springcraft.enm import ENM
+from springcraft.forcefield import ForceField
 
 
 class GNM(ENM):
@@ -109,6 +109,7 @@ class GNM(ENM):
                 f"Expected shape {(self._natoms, self._natoms)}, got {value.shape}"
             )
         self._kirchhoff = value
+
         # Invalidate dependent values
         self._covariance = None
         self._eigen_values = None

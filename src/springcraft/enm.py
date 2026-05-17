@@ -13,8 +13,8 @@ import biotite.structure.info as strucinfo
 import numpy as np
 from typing_extensions import Literal, Union, overload
 
-from . import nma
-from .forcefield import ForceField
+from springcraft import nma
+from springcraft.forcefield import ForceField
 
 K_B = 1.380649e-23
 N_A = 6.02214076e23
@@ -67,14 +67,22 @@ class ENM(ABC):
         The mass for each atom, `None` if no mass weighting is applied.
     """
 
+    # euclidean coordinates of each atom
     _coord: np.ndarray
+    # pseudo-inverse of the _interaction matrix
     _covariance: np.ndarray | None
+    # eigenvalues/-vectors of the _interaction matrix
     _eigen_values: np.ndarray | None
     _eigen_vectors: np.ndarray | None
+    # ForceField defining the atom interactions
     _ff: ForceField
+    # atom masses
     _masses: np.ndarray | None
+    # the mass weight matrix is used to weigh the _interactions matrix
     _masses_weight_matrix: np.ndarray | None
+    # the number of atoms
     _natoms: int
+    # whether to use an optimized algorithm to calculate the _interaction matrix
     _use_cell_list: bool
 
     def __init__(
@@ -141,6 +149,8 @@ class ENM(ABC):
         if value.shape != (length, length):
             raise IndexError(f"Expected shape {(length, length)}, got {value.shape}")
         self._covariance = value
+
+        # invalidate dependant values
         self._eigen_values = None
         self._eigen_vectors = None
 
@@ -207,7 +217,7 @@ class ENM(ABC):
 
         if zero_mask:
             threshhold = 1e-12 * self._eigen_values[-1]  # max(eig_val) * 10^-12
-            mask = self._eigen_values > threshhold
+            mask = np.abs(self._eigen_values) > threshhold
             return val, vec, mask
 
         return val, vec

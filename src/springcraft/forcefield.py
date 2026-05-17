@@ -6,7 +6,7 @@ i.e. Kirchhoff and Hessian matrices.
 from __future__ import annotations
 
 __name__ = "springcraft"
-__author__ = "Patrick Kunzmann, Jan Krumbach"
+__author__ = "Patrick Kunzmann, Jan Krumbach, Raphael Sutter"
 __all__ = [
     "ForceField",
     "PatchedForceField",
@@ -196,6 +196,7 @@ class PatchedForceField(ForceField):
                     f"{len(self._contact_pair_on)} switched on contact_pairs"
                 )
 
+    @override
     def force_constant(
         self, atom_i: np.ndarray, atom_j: np.ndarray, sq_distance: np.ndarray
     ) -> np.ndarray:
@@ -244,10 +245,12 @@ class PatchedForceField(ForceField):
             return force_constants
 
     @property
+    @override
     def cutoff_distance(self) -> float | None:
         return self._force_field.cutoff_distance
 
     @property
+    @override
     def contact_shutdown(self) -> np.ndarray | None:
         if self._contact_shutdown is None or self._force_field.contact_shutdown is None:
             return self._contact_shutdown
@@ -257,6 +260,7 @@ class PatchedForceField(ForceField):
             )
 
     @property
+    @override
     def contact_pair_off(self) -> np.ndarray | None:
         if self._contact_pair_off is None or self._force_field.contact_pair_off is None:
             return self._contact_pair_off
@@ -266,6 +270,7 @@ class PatchedForceField(ForceField):
             )
 
     @property
+    @override
     def contact_pair_on(self) -> np.ndarray | None:
         if self._contact_pair_on is None or self._force_field.contact_pair_on is None:
             return self._contact_pair_on
@@ -275,6 +280,12 @@ class PatchedForceField(ForceField):
             )
 
     @property
+    @override
+    def natoms(self) -> int | None:
+        return self._force_field.natoms
+
+    @property
+    @override
     def _force_constants(self) -> np.ndarray | None:
         if (
             self._force_constants_local is None
@@ -285,10 +296,6 @@ class PatchedForceField(ForceField):
             return np.concatenate(
                 [self._force_constants_local, self._force_field._force_constants]
             )
-
-    @property
-    def natoms(self) -> int | None:
-        return self._force_field.natoms
 
 
 class InvariantForceField(ForceField):
@@ -352,6 +359,7 @@ class HinsenForceField(ForceField):
     def __init__(self, cutoff_distance: float | None = None):
         self._cutoff_distance = cutoff_distance
 
+    @override
     def force_constant(
         self, atom_i: np.ndarray, atom_j: np.ndarray, sq_distance: np.ndarray
     ) -> np.ndarray:
@@ -362,6 +370,7 @@ class HinsenForceField(ForceField):
         )
 
     @property
+    @override
     def cutoff_distance(self) -> float | None:
         return self._cutoff_distance
 
@@ -394,12 +403,14 @@ class ParameterFreeForceField(ForceField):
     def __init__(self, cutoff_distance: float | None = None):
         self._cutoff_distance = cutoff_distance
 
+    @override
     def force_constant(
         self, atom_i: np.ndarray, atom_j: np.ndarray, sq_distance: np.ndarray
     ) -> np.ndarray:
         return 1 / sq_distance
 
     @property
+    @override
     def cutoff_distance(self) -> float | None:
         return self._cutoff_distance
 
@@ -557,6 +568,7 @@ class TabulatedForceField(ForceField):
         diag_i, diag_j = np.diag_indices(len(self._interaction_matrix))
         self._interaction_matrix[diag_i, diag_j, :] = 0
 
+    @override
     def force_constant(
         self, atom_i: np.ndarray, atom_j: np.ndarray, sq_distance: np.ndarray
     ) -> np.ndarray:
@@ -580,10 +592,12 @@ class TabulatedForceField(ForceField):
                     raise
 
     @property
+    @override
     def cutoff_distance(self) -> float | None:
         return None if self._edges is None else self._edges[-1]
 
     @property
+    @override
     def natoms(self) -> int:
         return self._natoms
 

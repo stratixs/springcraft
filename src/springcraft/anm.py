@@ -11,9 +11,9 @@ import biotite.structure as struc
 import numpy as np
 from typing_extensions import Literal, Union, overload, override
 
-from . import nma
-from .enm import ENM
-from .forcefield import ForceField
+from springcraft import nma
+from springcraft.enm import ENM
+from springcraft.forcefield import ForceField
 
 
 class ANM(ENM):
@@ -121,6 +121,7 @@ class ANM(ENM):
                 f"got {value.shape}"
             )
         self._hessian = value
+
         # Invalidate dependent values
         self._covariance = None
         self._eigen_values = None
