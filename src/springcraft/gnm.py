@@ -188,6 +188,30 @@ class GNM(ENMPert):
         self._kirchhoff = None
 
     @override
+    def _prepare_one_rank_update(
+        self, atom_i: int, atom_j: int, delta: bool | float
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
+        super()._prepare_one_rank_update(atom_i, atom_j, delta)
+
+        assert self._kirchhoff is not None  # checked by super()
+        if delta is False:
+            # turn off contact
+            delta = self._kirchhoff[atom_i, atom_j]
+        elif delta is True:
+            # turn on contact
+            disp = struc.displacement(self._coord[atom_i], self._coord[atom_j])
+            sq_dist = disp @ disp
+
+            delta = self._kirchhoff[atom_i, atom_j]
+            if self._ff.cutoff_distance is None or sq_dist <= self._ff.cutoff_distance:
+                delta += self._ff.force_constant(atom_i, atom_j, sq_dist)
+
+        if np.abs(delta) < 1e-10:
+            raise ValueError("No change in interaction strength.")
+
+        return np.array(atom_i), np.array(atom_j), np.array(1), delta
+
+    @override
     def _modify_contact_pair_covariance(self, atom_i: int, atom_j: int, delta: float):
         x = self._covariance[atom_i, :] - self._covariance[atom_j, :]
         beta = 1 + delta * (x[atom_j] - x[atom_i])

@@ -10,8 +10,8 @@ import pytest
 from biotite.structure import AtomArray
 
 import springcraft
-
-from .util import ModifiedForceField, data_dir
+from springcraft.nma import frequencies
+from tests.util import ModifiedForceField, data_dir
 
 
 def prepare_gnm(file_path, cutoff):
@@ -582,3 +582,22 @@ def test_modify_atom():
     ref_gnm.kirchhoff = gnm.kirchhoff.copy()
     reg_covariance = ref_gnm.covariance
     assert np.allclose(gnm.covariance, reg_covariance)
+
+
+def test_frequency_permutation():
+    pdb_file = pdb.PDBFile.read(join(data_dir(), "1l2y.pdb"))
+    atoms = pdb.get_structure(pdb_file, model=1)
+    ca = atoms[(atoms.atom_name == "CA") & (atoms.element == "C")]
+    ff = springcraft.InvariantForceField(7.9)
+
+    test_gnm = springcraft.GNM(ca, ff)
+    test_gnm.kirchhoff
+    test_gnm.eigen()
+    test_freq = test_gnm.frequencies_permutation(3, 5, 1)
+
+    ref_gnm = springcraft.GNM(ca, ff)
+    ref_gnm.kirchhoff
+    ref_gnm.modify_contact(3, 5, -1)
+    ref_freq = ref_gnm.frequencies()
+
+    assert np.allclose(test_freq, ref_freq)

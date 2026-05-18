@@ -11,9 +11,12 @@ from abc import abstractmethod
 
 import biotite.structure as struc
 import numpy as np
+import numpy.typing as npt
 from scipy.linalg import blas
 
 from springcraft.enm import ENM
+from springcraft.nma_helper import frequencies_helper
+from springcraft.utils import eigenvalue_update
 
 ger = blas.get_blas_funcs("ger", dtype=np.float64)
 
@@ -48,7 +51,7 @@ class ENMPert(ENM):
         delta : bool or float or array_like of bool or float, shape (1,) or (k,)
             A bool gets interpreted as a turn on/off signal.
             The amount by which the interaction strength between
-        atom i and j gets changed in the `interaction` matrix.
+            atom i and j gets changed in the `interaction` matrix.
             Must not be 0.
         skip_checks : bool, optional
             Whether to skip argument checks, by default False
@@ -203,6 +206,120 @@ class ENMPert(ENM):
             np.repeat(atom_i, length - 1), atom_j, delta, skip_checks=True
         )
 
+    def frequencies_permutation(
+        self,
+        atom_i: int,
+        atom_j: int,
+        delta: bool | float,
+        subset: npt.ArrayLike | None = None,
+    ) -> np.ndarray:
+        """
+        Computes the frequency associated with each mode for the permutated
+        ENM where the interaction strength between atoms `i` and `j` is
+        changed by `delta`.
+
+        The modes corresponding to rigid-body translations/rotations are
+        omitted in the return value.
+        The returned units are arbitrary and should only be compared
+        relative to each other.
+
+        Parameters
+        ----------
+        atom_i : int
+            First atom index
+        atom_j : int
+            Second atom index with ``atom_i[idx] != atom_j[idx]``
+        delta : bool | float
+            A bool value gets interpreted as a turn on/off signal.
+            Turning on resets the contact interaction strength to the initial value.
+            Turning off sets the contact interaction strength to zero.
+            A scalar value changes the contact interaction strength by the given amount.
+        subset : array_like of int, shape=(k,)
+
+        Returns
+        -------
+        freq : ndarray, shape=(n,), dtype=float
+            The frequency in ascending order of the associated modes'
+            Eigenvalues.
+        """
+        if self._eigen_values is None or self._eigen_vectors is None:
+            raise AttributeError("Eigenvalues must be calculated beforehand.")
+
+        slice_i, slice_j, slice_t, delta = self._prepare_one_rank_update(
+            atom_i, atom_j, delta
+        )
+
+        u = self._eigen_values
+        V = self._eigen_vectors
+        slice_t = np.atleast_1d(slice_t)
+        V_i = np.atleast_2d(V[slice_i])
+        V_j = np.atleast_2d(V[slice_j])
+        z = slice_t @ V_i - slice_t @ V_j
+
+        permutated_eig_values = []
+        if subset is None:
+            subset = np.arange(0, len(u))
+        else:
+            subset = np.atleast_1d(np.asarray(subset))
+        for i in subset:
+            value = eigenvalue_update(i, u, z, delta)
+            permutated_eig_values.append(value)
+
+        return frequencies_helper(np.array(permutated_eig_values))
+
+    @abstractmethod
+    def _prepare_one_rank_update(
+        self, atom_i: int, atom_j: int, delta: bool | int | float
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
+        """
+        This method checks arguments and provides values to describe a
+        one-rank update to the interaction matrix A. The one-rank permutation
+        :math:`A + \delta \vec{u} \vec{u}^T` can be described using the return
+        values by
+
+        >>> u = np.zeros(n)
+        ... u[slice_i] = slice_t
+            u[slice_j] = -slice_t
+            A + delta * np.outer(u, u)
+
+        Does not change any attributes of the ENM class.
+
+        Parameters
+        ----------
+        atom_i : int
+            First atom index
+        atom_j : int
+            Second atom index with ``atom_i[idx] != atom_j[idx]``
+        delta : bool | float
+            A bool value gets interpreted as a turn on/off signal.
+            Turning on resets the contact interaction strength to the initial value.
+            Turning off sets the contact interaction strength to zero.
+            A scalar value changes the contact interaction strength by the given amount.
+
+        Returns
+        -------
+        slice_i : ndarray, shape(k,), dtype=int
+            First index (range)
+        slice_j : ndarray, shape(k,), dtype=int
+            Second index (range)
+        slice_t : ndarray, shape(k,), dtype=float
+            Value(s) for the index range
+        delta : float
+            Permutation factor
+        """
+        if self._interactions is None:
+            raise AttributeError("Interaction matrix must exist.")
+        if atom_i < 0 or atom_i >= self._natoms:
+            raise IndexError(
+                f"atom_i={atom_i} is out of bounds for structure of length {self._natoms}."
+            )
+        if atom_j < 0 or atom_j >= self._natoms:
+            raise IndexError(
+                f"atom_j={atom_j} is out of bounds for structure of length {self._natoms}."
+            )
+        if atom_i == atom_j:
+            raise IndexError("Cannot modify contact with itself.")
+
     def _modify_contact_pair(
         self,
         atom_i: np.ndarray,
@@ -247,8 +364,8 @@ class ENMPert(ENM):
 
             self._modify_contact_pair_interaction(i, j, delta)
 
-        self._eig_values = None
-        self._eig_vectors = None
+        self._eigen_values = None
+        self._eigen_vectors = None
 
     @abstractmethod
     def _modify_contact_pair_covariance(self, atom_i: int, atom_j: int, delta: float):

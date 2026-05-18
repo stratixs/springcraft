@@ -22,6 +22,8 @@ from typing import Literal
 import numpy as np
 from typing_extensions import deprecated
 
+from springcraft.nma_helper import frequencies_helper
+
 # -> Import ANM/GNM in functions to prevent circular import error
 
 K_B = 1.380649e-23
@@ -74,25 +76,13 @@ def frequencies(enm) -> np.ndarray:
         The frequency in ascending order of the associated modes'
         Eigenvalues.
     """
-    from .anm import ANM
-    from .gnm import GNM
+    from springcraft.enm import ENM
 
-    if isinstance(enm, GNM):
-        ntriv_modes = 1
-    elif isinstance(enm, ANM):
-        ntriv_modes = 6
-    else:
-        raise ValueError("Instance of GNM/ANM class expected.")
+    if not isinstance(enm, ENM):
+        raise ValueError("Instance of ENM class expected.")
 
-    eig_values, _ = enm.eigen()
-
-    # The very first / first six Eigenvalue(s) is/are usually close to 0;
-    # but can have a negative sign.
-    eig_values[0:ntriv_modes] = np.abs(eig_values[0:ntriv_modes])
-
-    freq = 1 / (2 * np.pi) * np.sqrt(eig_values)
-
-    return freq
+    eig_values, _ = enm.eigen(copy=False)
+    return frequencies_helper(eig_values)
 
 
 def mean_square_fluctuation(
