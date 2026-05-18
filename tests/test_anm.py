@@ -6,57 +6,28 @@ from unittest.mock import patch
 import biotite.structure as struc
 import biotite.structure.info as strucinfo
 import biotite.structure.io.pdb as pdb
-import biotite.structure.io.pdbx as pdbx
 import numpy as np
 import pytest
-from biotite.structure import AtomArray
 
 import springcraft
-
-from .util import data_dir
-
-
-def prepare_springcraft_anm(file_path, cutoff):
-    if file_path.endswith("cif"):
-        cif_file = pdbx.CIFFile.read(file_path)
-        atoms = pdbx.get_structure(cif_file, model=1)
-        assert isinstance(atoms, AtomArray)
-    else:
-        pdb_file = pdb.PDBFile.read(file_path)
-        atoms = pdb.get_structure(pdb_file, model=1)
-
-    ca = atoms[(atoms.atom_name == "CA") & (atoms.element == "C")]
-    assert isinstance(ca, AtomArray)
-
-    ff = springcraft.InvariantForceField(cutoff)
-    test_anm = springcraft.ANM(ca, ff)
-
-    return test_anm
+from tests.util import data_dir, load_protein_structure, prepare_anm
 
 
 @pytest.mark.parametrize(
-    "file_path, cutoff",
+    "pdb_id, cutoff",
     itertools.product(
-        [
-            join(data_dir(), "1L2Y.cif"),
-            join(data_dir(), "104L.cif"),
-            join(data_dir(), "10NM.cif"),
-        ],
+        ["1l2y", "104l", "10nm"],
         [4, 7, 13],
     ),
 )
-def test_adjacency(file_path, cutoff):
+def test_adjacency(pdb_id, cutoff):
     """
     Tests that the cell list and brute force approaches produce
     the same result.
     Tests that PatchedForceFields are correctly handled. Activating
     a contact takes precedence over deactivation.
     """
-    cif_file = pdbx.CIFFile.read(file_path)
-    atoms = pdbx.get_structure(cif_file, model=1)
-    assert isinstance(atoms, AtomArray)
-    ca = atoms[(atoms.atom_name == "CA") & (atoms.element == "C")]
-    assert isinstance(ca, AtomArray)
+    ca = load_protein_structure(pdb_id)
     ff = springcraft.InvariantForceField(cutoff)
     ff = springcraft.PatchedForceField(
         ff,
@@ -93,28 +64,12 @@ def test_adjacency(file_path, cutoff):
     assert not np.array_equal(hessian[15:18, 10:12], np.zeros((3, 3)))  # (5, 3)
 
 
-@pytest.mark.parametrize("file_path", glob.glob(join(data_dir(), "*.pdb")))
-def test_covariance(file_path):
-    test_anm = prepare_springcraft_anm(file_path, cutoff=13)
-    test_hessian = test_anm.hessian
-    test_covariance = test_anm.covariance
-
-    assert np.allclose(
-        test_hessian, np.dot(test_hessian, np.dot(test_covariance, test_hessian))
-    )
-    assert np.allclose(
-        test_covariance, np.dot(test_covariance, np.dot(test_hessian, test_covariance))
-    )
-
-
 def test_mass_weights_simple():
     """
     Expect that mass weighting with unit masses does not have any
     influence on an ANM, but different weights do.
     """
-    pdb_file = pdb.PDBFile.read(join(data_dir(), "1l2y.pdb"))
-    atoms = pdb.get_structure(pdb_file, model=1)
-    ca = atoms[(atoms.atom_name == "CA") & (atoms.element == "C")]
+    ca = load_protein_structure("1l2y")
     ff = springcraft.InvariantForceField(7.9)
 
     ref_anm = springcraft.ANM(ca, ff)
@@ -162,14 +117,7 @@ def test_hessian_covariance_setter():
     Tests that the setter methods check for the correct matrix size and
     that dependend attributes are invalidated
     """
-    cif_file = pdbx.CIFFile.read(join(data_dir(), "1L2Y.cif"))
-    atoms = pdbx.get_structure(cif_file, model=1)
-    assert isinstance(atoms, AtomArray)
-    ca = atoms[(atoms.atom_name == "CA") & (atoms.element == "C")]
-    assert isinstance(ca, AtomArray)
-    ff = springcraft.InvariantForceField(7)
-
-    test_anm = springcraft.ANM(ca, ff)
+    test_anm = prepare_anm("1l2y", 7)
     test_hessian1 = test_anm.hessian
     test_covariance1 = test_anm.covariance
     test_eig_val1, _ = test_anm.eigen()
@@ -302,9 +250,9 @@ def test_eigen_parameters():
     Tests copies and the number of zero eigenvalues get returned
     depending on the input parameters.
     """
-    file_path = join(data_dir(), "1L2Y.cif")
+    pdb_id = "1l2y"
     cutoff = 7
-    test_anm = prepare_springcraft_anm(file_path, cutoff)
+    test_anm = prepare_anm(pdb_id, cutoff)
 
     eig_val1, eig_vec1 = test_anm.eigen(copy=False, zero_mask=False)
     eig_val1[1] = 3
@@ -313,7 +261,7 @@ def test_eigen_parameters():
     assert np.array_equal(eig_val1, eig_val2)
     assert np.array_equal(eig_vec1, eig_vec2)
 
-    test_anm = prepare_springcraft_anm(file_path, cutoff)
+    test_anm = prepare_anm(pdb_id, cutoff)
 
     eig_val1, eig_vec1 = test_anm.eigen(copy=True, zero_mask=False)
     eig_val1[1] = 3
@@ -322,7 +270,7 @@ def test_eigen_parameters():
     assert not np.array_equal(eig_val1, eig_val2)
     assert not np.array_equal(eig_vec1, eig_vec2)
 
-    test_anm = prepare_springcraft_anm(file_path, cutoff)
+    test_anm = prepare_anm(pdb_id, cutoff)
 
     eig_val1, eig_vec1, eig_zero_mask1 = test_anm.eigen(copy=False, zero_mask=True)
     eig_val1[1] = 3
@@ -331,7 +279,7 @@ def test_eigen_parameters():
     assert np.array_equal(eig_val1, eig_val2)
     assert np.array_equal(eig_vec1, eig_vec2)
 
-    test_anm = prepare_springcraft_anm(file_path, cutoff)
+    test_anm = prepare_anm(pdb_id, cutoff)
 
     eig_val1, eig_vec1, eig_zero_mask1 = test_anm.eigen(copy=True, zero_mask=True)
     eig_val1[1] = 3
@@ -342,24 +290,20 @@ def test_eigen_parameters():
 
 
 @pytest.mark.parametrize(
-    "file_path, cutoff",
+    "pdb_id, cutoff",
     itertools.product(
-        [
-            join(data_dir(), "1L2Y.cif"),
-            join(data_dir(), "104L.cif"),
-            join(data_dir(), "10NM.cif"),
-        ],
+        ["1l2y", "104l"],
         [4, 7, 13],
     ),
 )
-def test_eigen_before_covariance(file_path, cutoff):
+def test_eigen_before_covariance(pdb_id, cutoff):
     """
     Tests that the `Hessian` gets calculated if not present and no
     error is produced.
     Tests that covariance matrix calculation uses stored eigenvalues/-vector
     without calculating them all over again.
     """
-    test_anm = prepare_springcraft_anm(file_path, cutoff)
+    test_anm = prepare_anm(pdb_id, cutoff)
 
     eig_vals, eig_vecs = test_anm.eigen()
     # eigen() should calc the hessian if not present
@@ -377,24 +321,20 @@ def test_eigen_before_covariance(file_path, cutoff):
 
 
 @pytest.mark.parametrize(
-    "file_path, cutoff",
+    "pdb_id, cutoff",
     itertools.product(
-        [
-            join(data_dir(), "1L2Y.cif"),
-            join(data_dir(), "104L.cif"),
-            join(data_dir(), "10NM.cif"),
-        ],
+        ["1l2y", "104l"],
         [4, 7, 13],
     ),
 )
-def test_eigen_after_covariance(file_path, cutoff):
+def test_eigen_after_covariance(pdb_id, cutoff):
     """
     Tests that calculating the covariance matrix works correctly
     and that in the process the eigenvalues/-vectors are stored
     so that they do not have to be recalculated again when accessing
     them afterwards.
     """
-    test_anm = prepare_springcraft_anm(file_path, cutoff)
+    test_anm = prepare_anm(pdb_id, cutoff)
     ref_hessian = test_anm.hessian.copy()
 
     test_covariance = test_anm.covariance
@@ -408,6 +348,89 @@ def test_eigen_after_covariance(file_path, cutoff):
         assert np.allclose(np.matvec(ref_hessian, eig_vec), eig_val * eig_vec)
 
     assert np.allclose(ref_hessian, test_anm.hessian)
+
+
+def test_mean_square_fluctuation():
+    """
+    Tests whether the mean square fluctuations calculations
+    work correctly.
+    """
+    pdb_id = "1l2y"
+    cutoff = 7.0
+
+    # test full set
+    test_gnm = prepare_anm(pdb_id, cutoff)
+    test_gnm.hessian
+    assert test_gnm._covariance is None
+    msqf_eig_full = test_gnm.mean_square_fluctuation()
+    test_gnm.covariance
+    assert test_gnm._covariance is not None
+    msqf_cov_full = test_gnm.mean_square_fluctuation()
+    assert np.allclose(msqf_eig_full, msqf_cov_full)
+
+    # test small subset
+    subset = np.array([3, 17, 13])
+    test_gnm = prepare_anm(pdb_id, cutoff)
+    test_gnm.hessian
+    assert test_gnm._covariance is None
+    msqf_eig_subset = test_gnm.mean_square_fluctuation(mode_subset=subset)
+    assert np.allclose(msqf_eig_subset, msqf_eig_full[subset])
+    test_gnm.covariance
+    assert test_gnm._covariance is not None
+    msqf_cov_subset = test_gnm.mean_square_fluctuation(mode_subset=subset)
+    assert np.allclose(msqf_eig_subset, msqf_cov_subset)
+
+    # test temp scaling
+    test_gnm = prepare_anm(pdb_id, cutoff)
+    test_gnm.hessian
+    assert test_gnm._covariance is None
+    msqf_eig_temp = test_gnm.mean_square_fluctuation(tem=300)
+    assert np.allclose(msqf_eig_temp, 300 * 1.380649e-23 * msqf_eig_full)
+    test_gnm.covariance
+    assert test_gnm._covariance is not None
+    msqf_cov_temp = test_gnm.mean_square_fluctuation(tem=300)
+    assert np.allclose(msqf_eig_temp, msqf_cov_temp)
+
+
+def test_bfactor():
+    """
+    Tests whether the bfactor calculations work correctly.
+    """
+    pdb_id = "1l2y"
+    cutoff = 7.0
+
+    # test full set
+    test_gnm = prepare_anm(pdb_id, cutoff)
+    test_gnm.hessian
+    assert test_gnm._covariance is None
+    bfactor_eig_full = test_gnm.bfactor()
+    test_gnm.covariance
+    assert test_gnm._covariance is not None
+    bfactor_cov_full = test_gnm.bfactor()
+    assert np.allclose(bfactor_eig_full, bfactor_cov_full)
+
+    # test small subset
+    subset = np.array([3, 17, 13])
+    test_gnm = prepare_anm(pdb_id, cutoff)
+    test_gnm.hessian
+    assert test_gnm._covariance is None
+    bfactor_eig_subset = test_gnm.bfactor(mode_subset=subset)
+    assert np.allclose(bfactor_eig_subset, bfactor_eig_full[subset])
+    test_gnm.covariance
+    assert test_gnm._covariance is not None
+    bfactor_cov_subset = test_gnm.bfactor(mode_subset=subset)
+    assert np.allclose(bfactor_eig_subset, bfactor_cov_subset)
+
+    # test temp scaling
+    test_gnm = prepare_anm(pdb_id, cutoff)
+    test_gnm.hessian
+    assert test_gnm._covariance is None
+    bfactor_eig_temp = test_gnm.bfactor(tem=300)
+    assert np.allclose(bfactor_eig_temp, 300 * 1.380649e-23 * bfactor_eig_full)
+    test_gnm.covariance
+    assert test_gnm._covariance is not None
+    bfactor_cov_temp = test_gnm.bfactor(tem=300)
+    assert np.allclose(bfactor_eig_temp, bfactor_cov_temp)
 
 
 @pytest.mark.parametrize(

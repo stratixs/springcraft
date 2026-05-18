@@ -6,6 +6,10 @@ import biotite.structure.io.pdbx as pdbx
 import springcraft
 
 
+def data_dir():
+    return join(dirname(realpath(__file__)), "data")
+
+
 def load_protein_structure(pdb_id: str) -> struc.AtomArray:
     file_path = join(dirname(realpath(__file__)), "data", pdb_id + ".cif")
     cif_file = pdbx.CIFFile.read(file_path)
@@ -19,5 +23,7 @@ def prepare_gnm(pdb_id: str, cutoff: float | int) -> springcraft.GNM:
     return springcraft.GNM(ca, ff)
 
 
-def data_dir():
-    return join(dirname(realpath(__file__)), "data")
+def prepare_anm(pdb_id: str, cutoff: float | int) -> springcraft.ANM:
+    ca = load_protein_structure(pdb_id)
+    ff = springcraft.InvariantForceField(cutoff)
+    return springcraft.ANM(ca, ff)
