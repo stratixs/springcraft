@@ -22,7 +22,7 @@ ger = blas.get_blas_funcs("ger", dtype=np.float64)
 
 
 class ENMPert(ENM):
-    def modify_contact(self, atom_i, atom_j, delta, skip_checks=False):
+    def modify_contact(self, atom_i: int, atom_j: int, delta: bool | int | float):
         """
         Modifies the force constant in the `interaction` matrix between a
         pair of `atoms`. The interaction between the atoms can either be
@@ -44,105 +44,68 @@ class ENMPert(ENM):
 
         Parameters
         ----------
-        atom_i : array_like of int, shape=(k,)
+        atom_i : int
             First atom index
-        atom_j : array_like of int, shape=(k,)
-            Second atom index with ``atom_i[idx] != atom_j[idx]``
-        delta : bool or float or array_like of bool or float, shape (1,) or (k,)
-            A bool gets interpreted as a turn on/off signal.
-            The amount by which the interaction strength between
-            atom i and j gets changed in the `interaction` matrix.
-            Must not be 0.
-        skip_checks : bool, optional
-            Whether to skip argument checks, by default False
+        atom_j : int
+            Second atom index with ``atom_i != atom_j``
+        delta : bool | int | float
+            A bool value gets interpreted as a turn on/off signal.
+            Turning on resets the contact interaction strength to the initial value.
+            Turning off sets the contact interaction strength to zero.
+            A scalar value changes the contact interaction strength by the given amount.
 
-        Raises (if checks are enabled)
+        Raises
         ------
-        ValueError
-            If the `interaction` matrix does not exist or
-            If the index arrays cannot be converted to indices or
-            If index arrays do not have the same size or
-            If the `delta` value(s) are neither float nor bool.
+        AttributeError
+            If the `interaction` matrix does not exist.
         IndexError
-            If any indices are out of bounds for the initialized structure or
-            If the contact of an atom with itself shall be modified.
-        TypeError
-            If `delta` is neither a bool nor a float.
+            If any index is out of bounds or the indices are the same
+        ValueError
+            If the resulting `delta` is (nearly) 0.
         """
-        atom_i = np.atleast_1d(np.asarray(atom_i, dtype=int))
-        atom_j = np.atleast_1d(np.asarray(atom_j, dtype=int))
-        delta = np.asarray(delta)  # becomes 1d later
-
-        if not skip_checks:
-            if self._interactions is None:
-                raise AttributeError("Interaction matrix must exist.")
-            if atom_i.size != atom_j.size:
-                raise ValueError(
-                    f"Expected atom index arrays to have the same size "
-                    f"but got {atom_i.size} and {atom_j.size}."
-                )
-            if (
-                np.any(atom_i < 0)
-                or np.any(atom_i >= self._coord.shape[0])
-                or np.any(atom_j < 0)
-                or np.any(atom_j >= self._coord.shape[0])
-            ):
-                raise IndexError(
-                    f"Index out of bounds for a structure of length {self._coord.shape[0]}"
-                )
-            mask = atom_i == atom_j
-            if np.any(mask):
-                raise IndexError(
-                    f"Expected array indices to be different "
-                    f"but was {np.stack((atom_i, atom_j), axis=1)[mask, :]} "
-                    f"at {np.nonzero(mask)[0]}"
-                )
-            if delta.size != 1 and delta.size != atom_i.size:
-                raise ValueError(
-                    f"There must be either 1 delta for all updates "
-                    f"or as many as updates. "
-                    f"Expected {atom_i.size} or 1 "
-                    f"but was {delta.size}."
-                )
-            if (
-                not np.issubdtype(delta.dtype, np.integer)
-                and not np.issubdtype(delta.dtype, np.floating)
-                and not np.issubdtype(delta.dtype, np.bool)
-            ):
-                raise TypeError(
-                    f"Expected delta to be float or bool but was {delta.dtype}"
-                )
-
-        if delta.size == 1:
-            delta = np.repeat(delta, atom_i.size)
-
-        if np.issubdtype(delta.dtype, np.bool):
-            disp = struc.displacement(self._coord[atom_i], self._coord[atom_j])
-            sq_dist = (disp * disp).sum(axis=1)
-
-            mask_on = delta
-            if self._ff.cutoff_distance is not None:
-                mask_on &= sq_dist < self._ff.cutoff_distance**2
-            mask_off = ~delta
-
-            force_constants = np.zeros(delta.size)
-            force_constants[mask_on] = self._ff.force_constant(
-                atom_i[mask_on], atom_j[mask_on], sq_dist[mask_on]
-            )
-
-            delta = np.select(
-                [mask_on, mask_off],
-                [
-                    -(force_constants + self._interactions[atom_i, atom_j]),  # pyright: ignore[reportOptionalSubscript]
-                    -self._interactions[atom_i, atom_j],  # pyright: ignore[reportOptionalSubscript]
-                ],
-                default=0,
-            )
-
-        non_zero_mask = abs(delta) > 1e-8
-        self._modify_contact_pair(
-            atom_i[non_zero_mask], atom_j[non_zero_mask], delta[non_zero_mask]
+        slice_i, slice_j, slice_t, delta = self._prepare_one_rank_update(
+            atom_i, atom_j, delta
         )
+
+        if self._covariance is not None:
+            # fmt: off
+            x = slice_t @ self._covariance[slice_i, :] - slice_t @ self._covariance[slice_j, :]
+            beta = 1 + delta * slice_t @ (x[slice_i] - x[slice_j])
+
+            t = self._interactions[slice_j] @ x + self._interactions[slice_i] @ x
+            if np.abs(beta) < 1e-9:
+                # rank increase
+                cov_mul_diff = self._covariance @ x
+                x_dot = x @ x
+                alpha = (x @ cov_mul_diff) / (x_dot**2)
+
+                ger(alpha=1/-x_dot, x=x, y=cov_mul_diff, a=self._covariance.T, overwrite_a=True)  # pyright: ignore[reportCallIssue]
+                ger(alpha=1/-x_dot, x=cov_mul_diff, y=x, a=self._covariance.T, overwrite_a=True)  # pyright: ignore[reportCallIssue]
+                ger(alpha=alpha, x=x, y=x, a=self._covariance.T, overwrite_a=True)  # pyright: ignore[reportCallIssue]
+            elif np.linalg.norm(t, ord=np.inf) > 1e-9:
+                # rank decrease
+                y = -self._interactions @ x
+                y[slice_i] += slice_t
+                y[slice_j] -= slice_t
+                y_dot = y @ y
+
+                ger(alpha=1/-y_dot, x=x, y=y, a=self._covariance.T, overwrite_a=True)  # pyright: ignore[reportCallIssue]
+                ger(alpha=1/-y_dot, x=y, y=x, a=self._covariance.T, overwrite_a=True)  # pyright: ignore[reportCallIssue]
+                ger(alpha=beta/(delta * y_dot * y_dot), x=y, y=y, a=self._covariance.T, overwrite_a=True)  # pyright: ignore[reportCallIssue]
+            else:
+                # normal case: no rank change
+                ger(alpha=-delta/beta, x=x, y=x, a=self._covariance.T, overwrite_a=True)  # pyright: ignore[reportCallIssue]
+
+        # update interaction matrix
+        tensor = np.outer(delta * slice_t, slice_t)
+        self._interactions[slice_i, slice_j] -= tensor
+        self._interactions[slice_j, slice_i] -= tensor
+        self._interactions[slice_i, slice_i] += tensor
+        self._interactions[slice_j, slice_j] += tensor
+
+        # invalidate deoendant values
+        self._eigen_values = None
+        self._eigen_vectors = None
 
     def modify_atom(self, atom_i, new_atom, skip_checks=False):
         """
@@ -210,7 +173,7 @@ class ENMPert(ENM):
         self,
         atom_i: int,
         atom_j: int,
-        delta: bool | float,
+        delta: bool | int | float,
         subset: npt.ArrayLike | None = None,
     ) -> np.ndarray:
         """
@@ -228,8 +191,8 @@ class ENMPert(ENM):
         atom_i : int
             First atom index
         atom_j : int
-            Second atom index with ``atom_i[idx] != atom_j[idx]``
-        delta : bool | float
+            Second atom index with ``atom_i != atom_j``
+        delta : bool | int | float
             A bool value gets interpreted as a turn on/off signal.
             Turning on resets the contact interaction strength to the initial value.
             Turning off sets the contact interaction strength to zero.
@@ -251,10 +214,8 @@ class ENMPert(ENM):
 
         u = self._eigen_values
         V = self._eigen_vectors
-        slice_t = np.atleast_1d(slice_t)
-        V_i = np.atleast_2d(V[slice_i])
-        V_j = np.atleast_2d(V[slice_j])
-        z = slice_t @ V_i - slice_t @ V_j
+
+        z = slice_t @ V[slice_i] - slice_t @ V[slice_j]
 
         permutated_eig_values = []
         if subset is None:
@@ -270,7 +231,7 @@ class ENMPert(ENM):
     @abstractmethod
     def _prepare_one_rank_update(
         self, atom_i: int, atom_j: int, delta: bool | int | float
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
+    ) -> tuple[slice, slice, np.ndarray, float]:
         """
         This method checks arguments and provides values to describe a
         one-rank update to the interaction matrix A. The one-rank permutation
@@ -289,8 +250,8 @@ class ENMPert(ENM):
         atom_i : int
             First atom index
         atom_j : int
-            Second atom index with ``atom_i[idx] != atom_j[idx]``
-        delta : bool | float
+            Second atom index with ``atom_i != atom_j``
+        delta : bool | int | float
             A bool value gets interpreted as a turn on/off signal.
             Turning on resets the contact interaction strength to the initial value.
             Turning off sets the contact interaction strength to zero.
@@ -298,14 +259,23 @@ class ENMPert(ENM):
 
         Returns
         -------
-        slice_i : ndarray, shape(k,), dtype=int
-            First index (range)
-        slice_j : ndarray, shape(k,), dtype=int
-            Second index (range)
+        slice_i : slice
+            First index range (size k)
+        slice_j : slice
+            Second index range (size k)
         slice_t : ndarray, shape(k,), dtype=float
             Value(s) for the index range
         delta : float
             Permutation factor
+
+        Raises
+        ------
+        AttributeError
+            If the `interaction` matrix does not exist.
+        IndexError
+            If any index is out of bounds or the indices are the same
+        ValueError
+            If the resulting `delta` is (nearly) 0.
         """
         if self._interactions is None:
             raise AttributeError("Interaction matrix must exist.")
@@ -319,93 +289,3 @@ class ENMPert(ENM):
             )
         if atom_i == atom_j:
             raise IndexError("Cannot modify contact with itself.")
-
-    def _modify_contact_pair(
-        self,
-        atom_i: np.ndarray,
-        atom_j: np.ndarray,
-        deltas: np.ndarray,
-    ):
-        """
-        Modifies the interaction strengths between the atoms i and j
-        in the `interaction` matrix. Requires for the `interaction` matrix
-        to exist and for the change delta to be not null. The interaction
-        strength of an atom with itself shall not be changed.
-
-        As this is a private method, the input arguments are not
-        validated. Input argument validation happens in the user facing
-        functions which will always supply semantically correct
-        arguments.
-
-        If the `covariance` matrix exists, this method performs a fast
-        permutation to the `covariance` matrix based on the given
-        permutation to the `interaction` matrix. This speeds up
-        calculations as the `covariance` matrix does not need to be
-        calculated by SVD again.
-
-        TODO
-        - formulas
-        - speedup
-
-        Parameters
-        ----------
-        atom_i : ndarray, shape=(k,), dtype=int
-            First atom index
-        atom_j : ndarray, shape=(k,), dtype=int
-            Second atom index with ``atom_i[idx] != atom_j[idx]``
-        delta : ndarray, shape=(k,), dtype=float
-            The amount by which the interaction strength between
-            atom i and j gets changed in the `interaction` matrix.
-            Must not be 0.
-        """
-        for i, j, delta in np.nditer([atom_i, atom_j, deltas]):
-            if self._covariance is not None:
-                self._modify_contact_pair_covariance(i, j, delta)
-
-            self._modify_contact_pair_interaction(i, j, delta)
-
-        self._eigen_values = None
-        self._eigen_vectors = None
-
-    @abstractmethod
-    def _modify_contact_pair_covariance(self, atom_i: int, atom_j: int, delta: float):
-        pass
-
-    def _modify_contact_pair_covariance_rank_unchanged(self, x, delta, beta):
-        ger(alpha=delta / beta, x=x, y=x, a=self._covariance.T, overwrite_a=True)
-
-    def _modify_contact_pair_covariance_rank_decrease(self, x):
-        cov_mul_diff = np.matvec(self._covariance, x)
-        x_dot = np.dot(x, x)
-        alpha = np.dot(x, cov_mul_diff) / (x_dot * x_dot)
-        # fmt: off
-        ger(alpha=1/-x_dot, x=x, y=cov_mul_diff, a=self._covariance.T, overwrite_a=True)
-        ger(alpha=1/-x_dot, x=cov_mul_diff, y=x, a=self._covariance.T, overwrite_a=True)
-        ger(alpha=alpha, x=x, y=x, a=self._covariance.T, overwrite_a=True)
-        # fmt: on
-        # dd_mul_cov = np.einsum("i,j->ij", x / -x_dot, cov_mul_diff)
-        # k_cov_h_mul_kh = np.einsum("i,j->ij", alpha * x, x)
-        # self._covariance += dd_mul_cov + dd_mul_cov.T + k_cov_h_mul_kh
-
-    def _modify_contact_pair_covariance_rank_increase(self, x, y, beta, delta):
-        y_dot = np.dot(y, y)
-        # fmt: off
-        ger(alpha=1/-y_dot, x=x, y=y, a=self._covariance.T, overwrite_a=True)
-        ger(alpha=1/-y_dot, x=y, y=x, a=self._covariance.T, overwrite_a=True)
-        ger(alpha=beta/(-delta * y_dot * y_dot), x=y, y=y, a=self._covariance.T, overwrite_a=True)
-        # fmt: on
-
-        # x_y = np.einsum("i,j->ij", x / -y_dot, y)
-        # beta_y_y = np.einsum("i,j->ij", y * beta / (-delta * y_dot * y_dot), y)
-        # self._covariance += x_y + x_y.T + beta_y_y
-
-    @abstractmethod
-    def _modify_contact_pair_interaction(self, atom_i: int, atom_j: int, delta: float):
-        """
-        Performs a one-rank permutation to the `interaction` matrix.
-        The permutation describes a change in the force constance between
-        atoms `atom_i` and `atom_j` by `delta`.
-
-        The `interaction` matrix must exists.
-        """
-        pass

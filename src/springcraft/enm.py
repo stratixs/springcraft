@@ -94,7 +94,7 @@ class ENM(ABC):
         masses=None,
         use_cell_list=True,
     ):
-        self._coord = np.asarray(struc.coord(atoms))
+        self._coord = np.asarray(struc.coord(atoms)).astype(np.float64, copy=False)
         self._natoms = len(self._coord)
         self._ff = force_field
         self._use_cell_list = use_cell_list
@@ -489,8 +489,8 @@ class ENM(ABC):
                     if turn_off[atom_i, atom_j]:
                         continue
 
-                    disp = struc.displacement(atom_i_coord, coord[atom_j])
-                    sq_dist = np.dot(disp, disp)
+                    disp = coord[atom_j] - atom_i_coord
+                    sq_dist = disp @ disp
                     sq_dist_matrix[atom_i, atom_j] = sq_dist
                     sq_dist_matrix[atom_j, atom_i] = sq_dist
 
@@ -514,7 +514,7 @@ class ENM(ABC):
                         # atom already on
                         continue
 
-                    disp = struc.displacement(coord[atom_i], coord[atom_j])
+                    disp = coord[atom_i] - coord[atom_j]
                     sq_dist = np.dot(disp, disp)
                     sq_dist_matrix[atom_i, atom_j] = sq_dist
                     sq_dist_matrix[atom_j, atom_i] = sq_dist

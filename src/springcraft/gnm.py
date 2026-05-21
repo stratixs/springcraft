@@ -190,46 +190,35 @@ class GNM(ENMPert):
     @override
     def _prepare_one_rank_update(
         self, atom_i: int, atom_j: int, delta: bool | float
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
+    ) -> tuple[slice, slice, np.ndarray, float]:
         super()._prepare_one_rank_update(atom_i, atom_j, delta)
 
-        assert self._kirchhoff is not None  # checked by super()
         if delta is False:
             # turn off contact
-            delta = self._kirchhoff[atom_i, atom_j]
+            delta = self._kirchhoff[atom_i, atom_j]  # pyright: ignore[reportOptionalSubscript]
         elif delta is True:
             # turn on contact
-            disp = struc.displacement(self._coord[atom_i], self._coord[atom_j])
+            disp = self._coord[atom_j] - self._coord[atom_i]
             sq_dist = disp @ disp
 
-            delta = self._kirchhoff[atom_i, atom_j]
-            if self._ff.cutoff_distance is None or sq_dist <= self._ff.cutoff_distance:
-                delta += self._ff.force_constant(atom_i, atom_j, sq_dist)
+            delta = self._kirchhoff[atom_i, atom_j]  # pyright: ignore[reportOptionalSubscript]
+            if (
+                self._ff.cutoff_distance is None
+                or sq_dist <= self._ff.cutoff_distance**2
+            ):
+                # ff contact_pair_on
+                delta += self._ff.force_constant(  # pyright: ignore[reportAssignmentType]
+                    np.atleast_1d(atom_i),
+                    np.atleast_1d(atom_j),
+                    np.atleast_1d(sq_dist),
+                )
 
         if np.abs(delta) < 1e-10:
             raise ValueError("No change in interaction strength.")
 
-        return np.array(atom_i), np.array(atom_j), np.array(1), delta
-
-    @override
-    def _modify_contact_pair_covariance(self, atom_i: int, atom_j: int, delta: float):
-        x = self._covariance[atom_i, :] - self._covariance[atom_j, :]
-        beta = 1 + delta * (x[atom_j] - x[atom_i])
-
-        if np.abs(beta) < 1e-10:
-            self._modify_contact_pair_covariance_rank_decrease(x)
-        elif np.abs((self._kirchhoff[atom_i] + self._kirchhoff[atom_j]) @ x) > 1e-10:
-            y = -np.matvec(self._interactions, x)
-            y[atom_i] += 1
-            y[atom_j] -= 1
-            self._modify_contact_pair_covariance_rank_increase(x, y, beta, delta)
-        else:
-            # default case: A + alpha * u * u.T
-            self._modify_contact_pair_covariance_rank_unchanged(x, delta, beta)
-
-    @override
-    def _modify_contact_pair_interaction(self, atom_i: int, atom_j: int, delta: float):
-        self._kirchhoff[atom_i, atom_j] += delta  # pyright: ignore[reportOptionalSubscript]
-        self._kirchhoff[atom_j, atom_i] += delta  # pyright: ignore[reportOptionalSubscript]
-        self._kirchhoff[atom_i, atom_i] -= delta  # pyright: ignore[reportOptionalSubscript]
-        self._kirchhoff[atom_j, atom_j] -= delta  # pyright: ignore[reportOptionalSubscript]
+        return (
+            slice(atom_i, atom_i + 1),
+            slice(atom_j, atom_j + 1),
+            np.atleast_1d(1),
+            delta,
+        )

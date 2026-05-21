@@ -412,179 +412,91 @@ def test_fluctuation_dcc(file_path, cutoff):
     assert np.allclose(test_dcc_absolute, reference_dcc_absolute)
 
 
-@pytest.mark.parametrize("nb_of_changes", [1, 3, 20, 27, 200])
-def test_modify_contact_pair(nb_of_changes):
+def test_modify_contact_pair():
     """
     Tests whether permutations to the `kirchhoff` matrix are
     performed correctly and the resulting permutations to the
     `covariance` matrix are correct.
-
-    TODO integrate numerical tests here?
-
-    Parameters
-    ----------
-    nb_of_changes : int
-        number of permutations to perform
-    """
-    pdb_file = pdb.PDBFile.read(join(data_dir(), "1l2y.pdb"))
-    atoms = pdb.get_structure(pdb_file, model=1)
-    ca = atoms[(atoms.atom_name == "CA") & (atoms.element == "C")]
-    ff = springcraft.InvariantForceField(7.9)
-
-    rng = np.random.default_rng(0)
-    atom_i = rng.integers(0, len(ca), size=nb_of_changes)
-    offsets = rng.integers(1, len(ca), size=nb_of_changes)
-    atom_j = (atom_i + offsets) % len(ca)
-    delta = rng.random(nb_of_changes) * 2 - 1
-
-    ref_ff = ModifiedForceField(ff, len(ca), atom_i, atom_j, delta)
-    ref_gnm = springcraft.GNM(ca, ref_ff)
-    ref_kirchhoff = ref_gnm.kirchhoff
-    ref_covariance = ref_gnm.covariance
-
-    gnm = springcraft.GNM(ca, ff)
-    gnm.kirchhoff
-    gnm.covariance
-    assert gnm._covariance is not None
-    gnm._modify_contact_pair(atom_i, atom_j, delta)
-    mod_kirchhoff = gnm.kirchhoff
-    mod_covariance = gnm.covariance
-
-    assert np.allclose(mod_kirchhoff, ref_kirchhoff)
-    assert np.allclose(mod_covariance, ref_covariance)
-
-
-@pytest.mark.parametrize(
-    "atom_i, atom_j, delta, expected_kirchhoff_change",
-    [
-        (1, 4, 0.3, 0.3),
-        ([1, 8, 11], [4, 6, 12], [0.3, -1.1, 1e-9], [0.3, -1.1, 0]),
-        ([1, 11], [4, 12], 0.3, [0.3, 0.3]),
-        ([1, 3, 8], [4, 7, 11], [False, True, True], [6.616000175476074, 2.4, 0]),
-        ([1, 11], [4, 12], False, [6.616000175476074, 46.83000183105469]),
-        ([3, 15], [7, 18], True, [2.4, -11.7]),
-    ],
-)
-def test_modify_contact(atom_i, atom_j, delta, expected_kirchhoff_change):
-    """
-    Tests the wrapper function for correct argument conversion.
-    """
-    pdb_file = pdb.PDBFile.read(join(data_dir(), "1l2y.pdb"))
-    atoms = pdb.get_structure(pdb_file, model=1)
-    ca = atoms[(atoms.atom_name == "CA") & (atoms.element == "C")]
-    ff = springcraft.TabulatedForceField.d_enm(ca)
-
-    np.set_printoptions(precision=4, suppress=True, linewidth=300)
-
-    gnm = springcraft.GNM(ca, ff)
-    print(gnm.kirchhoff)
-
-    idx_i = np.array([3, 15, 8])
-    idx_j = np.array([7, 18, 11])
-    val = np.array([-2.4, 11.7, 1e-9])
-    init_ff = ModifiedForceField(ff, len(ca), idx_i, idx_j, val)
-    init_gnm = springcraft.GNM(ca, init_ff)
-    init_kirchhoff = init_gnm.kirchhoff
-
-    gnm = springcraft.GNM(ca, ff)
-    gnm.kirchhoff = init_kirchhoff
-    gnm.covariance
-    assert gnm._covariance is not None
-    gnm.modify_contact(atom_i, atom_j, delta)
-    mod_kirchhoff = gnm.kirchhoff
-    mod_covariance = gnm.covariance
-
-    if not hasattr(atom_i, "__iter__"):
-        atom_i = [atom_i]
-        atom_j = [atom_j]
-        expected_kirchhoff_change = [expected_kirchhoff_change]
-    idx_i = np.concatenate([idx_i, atom_i])
-    idx_j = np.concatenate([idx_j, atom_j])
-    val = np.concatenate([val, expected_kirchhoff_change])
-    ref_ff = ModifiedForceField(ff, len(ca), idx_i, idx_j, val)
-    ref_gnm = springcraft.GNM(ca, ref_ff)
-    ref_kirchhoff = ref_gnm.kirchhoff
-    ref_covariance = ref_gnm.covariance
-
-    assert np.allclose(mod_kirchhoff, ref_kirchhoff)
-    assert np.allclose(mod_covariance, ref_covariance)
-
-
-def test_modify_contact_checks():
-    """
-    Tests the wrapper function checks the input arguments correctly.
     """
     pdb_file = pdb.PDBFile.read(join(data_dir(), "1l2y.pdb"))
     atoms = pdb.get_structure(pdb_file, model=1)
     ca = atoms[(atoms.atom_name == "CA") & (atoms.element == "C")]
     ff = springcraft.InvariantForceField(7.0)
+    test_gnm = springcraft.GNM(ca, ff)
 
-    gnm = springcraft.GNM(ca, ff)
-    with pytest.raises(AttributeError, match="Interaction matrix must exist"):
-        gnm.modify_contact([1, 8, 11], [4, 6, 12], [0.3, -1.1, 1e-9])
+    # error responses
+    assert test_gnm._kirchhoff is None
+    with pytest.raises(AttributeError, match="Interaction matrix must exist."):
+        test_gnm.modify_contact(1, 2, 1)
+    test_gnm.kirchhoff
+    with pytest.raises(IndexError):
+        test_gnm.modify_contact(-1, 2, 1)
+    with pytest.raises(IndexError):
+        test_gnm.modify_contact(20, 2, 1)
+    with pytest.raises(IndexError):
+        test_gnm.modify_contact(1, -2, 1)
+    with pytest.raises(IndexError):
+        test_gnm.modify_contact(1, 20, 1)
+    with pytest.raises(IndexError):
+        test_gnm.modify_contact(1, 1, 1)
+    with pytest.raises(ValueError):
+        test_gnm.modify_contact(1, 2, 0)  # zero delta
+    with pytest.raises(ValueError):
+        test_gnm.modify_contact(1, 2, True)  # turn on contact that is already on
+    with pytest.raises(ValueError):
+        test_gnm.modify_contact(1, 19, False)  # turn off contact that is already off
 
-    gnm.kirchhoff
-    gnm.covariance
-    with pytest.raises(ValueError, match="atom index arrays to have the same size"):
-        gnm.modify_contact([1, 8], [4, 6, 12], [0.3, -1.1, 1e-9])
-    with pytest.raises(IndexError, match="Expected array indices to be different"):
-        gnm.modify_contact([1, 8, 11], [4, 8, 11], [0.3, -1.1, 1e-9])
-    with pytest.raises(IndexError, match="Index out of bounds"):
-        gnm.modify_contact([-1, 8], [4, 6], [0.3, -1.1])
-    with pytest.raises(IndexError, match="Index out of bounds"):
-        gnm.modify_contact([1, 8], [20, 6], [0.3, -1.1])
-    with pytest.raises(IndexError, match="Index out of bounds"):
-        gnm.modify_contact([1, -1], [4, 6], [0.3, -1.1])
-    with pytest.raises(IndexError, match="Index out of bounds"):
-        gnm.modify_contact([1, 8], [4, 20], [0.3, -1.1])
-    with pytest.raises(ValueError, match=r"1 delta .* or as many as updates"):
-        gnm.modify_contact([1, 8, 11], [4, 6, 12], [0.3, -1.1])
-    with pytest.raises(ValueError, match="invalid literal for int"):
-        gnm.modify_contact(["a", 8, 11], [4, 6, 12], [0.3, -1.1, 1e-9])
-    with pytest.raises(ValueError, match="invalid literal for int"):
-        gnm.modify_contact([1, 8, 11], ["e", 6, 12], [0.3, -1.1, 1e-9])
-    with pytest.raises(TypeError, match="Expected delta to be float or bool"):
-        gnm.modify_contact([1, 8, 11], [4, 6, 12], ["a", -1.1, 1e-9])
+    test_gnm.covariance
+    assert test_gnm._covariance is not None
 
+    # arbitrary delta with rank unchanged
+    test_gnm.modify_contact(4, 8, 2)
+    ref_ff = ModifiedForceField(ff, len(ca), 4, 8, 2)
+    ref_gnm = springcraft.GNM(ca, ref_ff)
+    assert np.allclose(test_gnm.kirchhoff, ref_gnm.kirchhoff)
+    assert np.allclose(test_gnm.covariance, ref_gnm.covariance)
 
-def test_modify_atom():
-    """
-    Tests the wrapper function for correct argument conversion.
-    """
-    pdb_file = pdb.PDBFile.read(join(data_dir(), "1l2y.pdb"))
-    atoms = pdb.get_structure(pdb_file, model=1)
-    ca = atoms[(atoms.atom_name == "CA") & (atoms.element == "C")]
-    ff = springcraft.TabulatedForceField.e_anm(ca)
+    # rank unchanged
+    test_gnm.modify_contact(4, 8, False)
+    ref_ff = ModifiedForceField(ff, len(ca), 4, 8, -1)
+    ref_gnm = springcraft.GNM(ca, ref_ff)
+    assert np.allclose(test_gnm.kirchhoff, ref_gnm.kirchhoff)
+    assert np.allclose(test_gnm.covariance, ref_gnm.covariance)
 
-    gnm = springcraft.GNM(ca, ff)
-    orig_kirchhoff = gnm.kirchhoff.copy()
-    orig_covariance = gnm.covariance.copy()
+    # rank decrease
+    test_gnm.modify_contact(5, 8, False)
+    test_gnm.modify_contact(6, 8, False)
+    test_gnm.modify_contact(7, 8, False)
+    test_gnm.modify_contact(9, 8, False)
+    test_gnm.modify_contact(10, 8, False)
+    test_gnm.modify_contact(13, 8, False)
+    ref_ff = ModifiedForceField(
+        ff,
+        len(ca),
+        [4, 5, 6, 7, 9, 10, 13],
+        [8, 8, 8, 8, 8, 8, 8],
+        [-1, -1, -1, -1, -1, -1, -1],
+    )
+    ref_gnm = springcraft.GNM(ca, ref_ff)
+    assert np.allclose(test_gnm.kirchhoff, ref_gnm.kirchhoff)
+    assert np.allclose(test_gnm.covariance, ref_gnm.covariance)
 
-    # turn off contact
-    gnm.modify_atom(7, False)
-    assert np.allclose(gnm.kirchhoff[7, :], np.zeros(len(ca)))
-
-    ref_gnm = springcraft.GNM(ca, ff)
-    ref_gnm.kirchhoff = gnm.kirchhoff.copy()
-    reg_covariance = ref_gnm.covariance
-    assert np.allclose(gnm.covariance, reg_covariance)
-
-    # turn on contact
-    gnm.modify_atom(7, True)
-    assert np.allclose(gnm.kirchhoff, orig_kirchhoff)
-    assert np.allclose(gnm.covariance, orig_covariance)
-
-    # change amino acid type
-    ca.res_name[7] = "GLN"
-    gnm.modify_atom(7, ca[7])
-    ff = springcraft.TabulatedForceField.e_anm(ca)
-    ref_gnm = springcraft.GNM(ca, ff)
-    ref_gnm.kirchhoff = gnm.kirchhoff.copy()
-    reg_covariance = ref_gnm.covariance
-    assert np.allclose(gnm.covariance, reg_covariance)
+    # rank increase
+    test_gnm.modify_contact(4, 8, True)
+    ref_ff = ModifiedForceField(
+        ff,
+        len(ca),
+        [5, 6, 7, 9, 10, 13],
+        [8, 8, 8, 8, 8, 8],
+        [-1, -1, -1, -1, -1, -1],
+    )
+    ref_gnm = springcraft.GNM(ca, ref_ff)
+    assert np.allclose(test_gnm.kirchhoff, ref_gnm.kirchhoff)
+    assert np.allclose(test_gnm.covariance, ref_gnm.covariance)
 
 
 def test_frequency_permutation():
+    # TODO test negative
     pdb_file = pdb.PDBFile.read(join(data_dir(), "1l2y.pdb"))
     atoms = pdb.get_structure(pdb_file, model=1)
     ca = atoms[(atoms.atom_name == "CA") & (atoms.element == "C")]
@@ -594,10 +506,12 @@ def test_frequency_permutation():
     test_gnm.kirchhoff
     test_gnm.eigen()
     test_freq = test_gnm.frequencies_permutation(3, 5, 1)
+    test_freq_subset = test_gnm.frequencies_permutation(3, 5, 1, [4, 5, 6])
 
     ref_gnm = springcraft.GNM(ca, ff)
     ref_gnm.kirchhoff
-    ref_gnm.modify_contact(3, 5, -1)
+    ref_gnm.modify_contact(3, 5, 1)
     ref_freq = ref_gnm.frequencies()
 
     assert np.allclose(test_freq, ref_freq)
+    assert np.allclose(test_freq_subset, ref_freq[4:7])
