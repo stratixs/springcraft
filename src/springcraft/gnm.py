@@ -117,11 +117,11 @@ class GNM(ENM):
 
     @property
     @override
-    def dof_per_node(self) -> int:
+    def dof(self) -> int:
         """
         Returns
         -------
-        dof_per_node : int
+        dof : int
             Returns the Degree of Freedom per atom.
         """
         return 1
