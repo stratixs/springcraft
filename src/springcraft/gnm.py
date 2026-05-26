@@ -9,6 +9,7 @@ __all__ = ["GNM"]
 
 import biotite.structure as struc
 import numpy as np
+import numpy.typing as npt
 from typing_extensions import Literal, Union, overload, override
 
 from springcraft.enm_pert import ENMPert
@@ -117,14 +118,50 @@ class GNM(ENMPert):
 
     @property
     @override
-    def dof_per_node(self) -> int:
+    def dof(self) -> int:
         """
         Returns
         -------
-        dof_per_node : int
+        dof : int
             Returns the Degree of Freedom per atom.
         """
         return 1
+
+    @override
+    def modify_atom(self, atom_i: int, new_atom: bool | struc.Atom):
+        super().modify_atom(atom_i, new_atom)
+
+        delta = self._kirchhoff[atom_i].copy()
+        delta[atom_i] = 0
+
+        if new_atom is not False:
+            # reset contact to original force constant
+            # TODO ff contact_pair_on
+            disp = self._coord - self._coord[atom_i]
+            sq_dist = np.sum(disp * disp, axis=1)
+            sq_dist[atom_i] = np.inf
+
+            if self._ff.cutoff_distance is None:
+                if atom_i > 0:
+                    delta[:atom_i] += self._ff.force_constant(
+                        np.repeat(atom_i, atom_i), np.arange(atom_i), sq_dist[:atom_i]
+                    )
+                if atom_i < self._natoms - 1:
+                    delta[atom_i + 1 :] += self._ff.force_constant(
+                        np.repeat(atom_i, self._natoms - atom_i - 1),
+                        np.arange(atom_i + 1, self._natoms),
+                        sq_dist[atom_i + 1 :],
+                    )
+            else:
+                idxs = np.argwhere(sq_dist <= self._ff.cutoff_distance**2).flatten()
+                delta[idxs] += self._ff.force_constant(
+                    np.repeat(atom_i, len(idxs)), idxs, sq_dist[idxs]
+                )
+
+        for atom_j in np.argwhere(np.abs(delta) >= 1e-9).flatten():
+            if self._covariance is not None:
+                self._modify_covariance(atom_i, atom_j, None, delta[atom_j])
+            self._modify_interactions(atom_i, atom_j, None, delta[atom_j])
 
     @overload
     def eigen(
@@ -189,24 +226,23 @@ class GNM(ENMPert):
 
     @override
     def _prepare_one_rank_update(
-        self, atom_i: int, atom_j: int, delta: bool | float
+        self, atom_i: int, atom_j: int, delta: bool | int | float
     ) -> tuple[slice, slice, np.ndarray, float]:
         super()._prepare_one_rank_update(atom_i, atom_j, delta)
 
         if delta is False:
             # turn off contact
-            delta = self._kirchhoff[atom_i, atom_j]  # pyright: ignore[reportOptionalSubscript]
+            delta = self._kirchhoff[atom_i, atom_j]
         elif delta is True:
-            # turn on contact
+            # turn on contact (reset to original value)
             disp = self._coord[atom_j] - self._coord[atom_i]
             sq_dist = disp @ disp
-
-            delta = self._kirchhoff[atom_i, atom_j]  # pyright: ignore[reportOptionalSubscript]
             if (
                 self._ff.cutoff_distance is None
                 or sq_dist <= self._ff.cutoff_distance**2
             ):
-                # ff contact_pair_on
+                # TODO ff contact_pair_on
+                delta = self._kirchhoff[atom_i, atom_j]
                 delta += self._ff.force_constant(  # pyright: ignore[reportAssignmentType]
                     np.atleast_1d(atom_i),
                     np.atleast_1d(atom_j),

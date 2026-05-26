@@ -147,7 +147,7 @@ class ENM(ABC):
 
     @covariance.setter
     def covariance(self, value: np.ndarray):
-        length = self._natoms * self.dof_per_node
+        length = self._natoms * self.dof
         if value.shape != (length, length):
             raise IndexError(f"Expected shape {(length, length)}, got {value.shape}")
         self._covariance = value
@@ -160,7 +160,7 @@ class ENM(ABC):
 
     @property
     @abstractmethod
-    def dof_per_node(self) -> int:
+    def dof(self) -> int:
         pass  # pragma: no cover
 
     @overload

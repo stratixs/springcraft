@@ -9,6 +9,7 @@ __all__ = ["ANM"]
 
 import biotite.structure as struc
 import numpy as np
+import numpy.typing as npt
 from typing_extensions import Literal, Union, overload, override
 
 from springcraft import nma
@@ -129,14 +130,60 @@ class ANM(ENMPert):
 
     @property
     @override
-    def dof_per_node(self) -> int:
+    def dof(self) -> int:
         """
         Returns
         -------
-        dof_per_node : int
+        dof : int
             Returns the Degree of Freedom per atom.
         """
         return 3
+
+    @override
+    def modify_atom(self, atom_i: int, new_atom: bool | struc.Atom):
+        super().modify_atom(atom_i, new_atom)
+
+        disp = self._coord - self._coord[atom_i]
+        sq_disp = disp * disp
+        sq_dist = np.sum(sq_disp, axis=1)
+        sq_dist[atom_i] = np.inf
+        comp = sq_disp[:, 0] / sq_dist
+        comp[atom_i] = np.inf
+
+        tmp = np.arange(0, self._natoms * self.dof, self.dof)
+        delta = self._hessian[atom_i * self.dof, tmp] / comp
+        delta[atom_i] = 0
+
+        if new_atom is not False:
+            # TODO ff contact_pair_on
+            if self._ff.cutoff_distance is None:
+                if atom_i > 0:
+                    delta[:atom_i] += self._ff.force_constant(
+                        np.repeat(atom_i, atom_i), np.arange(atom_i), sq_dist[:atom_i]
+                    )
+                if atom_i < self._natoms - 1:
+                    delta[atom_i + 1 :] += self._ff.force_constant(
+                        np.repeat(atom_i, self._natoms - atom_i - 1),
+                        np.arange(atom_i + 1, self._natoms),
+                        sq_dist[atom_i + 1 :],
+                    )
+            else:
+                idxs = np.argwhere(sq_dist <= self._ff.cutoff_distance**2).flatten()
+                delta[idxs] += self._ff.force_constant(
+                    np.repeat(atom_i, len(idxs)), idxs, sq_dist[idxs]
+                )
+
+        slice_i = slice(atom_i * self.dof, (atom_i + 1) * self.dof)
+        atom_j_idxs = np.argwhere(np.abs(delta) > 1e-9).flatten()
+        slice_t = disp[atom_j_idxs] / np.sqrt(sq_dist[atom_j_idxs]).reshape(
+            (len(atom_j_idxs), 1)
+        )
+        for k in np.argsort(sq_dist[atom_j_idxs]):
+            atom_j = atom_j_idxs[k]
+            slice_j = slice(atom_j * self.dof, (atom_j + 1) * self.dof)
+            if self._covariance is not None:
+                self._modify_covariance(slice_i, slice_j, slice_t[k], delta[atom_j])
+            self._modify_interactions(slice_i, slice_j, slice_t[k], delta[atom_j])
 
     @overload
     def eigen(
@@ -350,23 +397,20 @@ class ANM(ENMPert):
     ) -> tuple[slice, slice, np.ndarray, float]:
         super()._prepare_one_rank_update(atom_i, atom_j, delta)
 
-        dof = self.dof_per_node
-
         disp = self._coord[atom_j] - self._coord[atom_i]
         sq_dist = disp @ disp
         comp = disp[0] ** 2 / sq_dist
-
         if delta is False:
             # turn off contact
-            delta = self._hessian[atom_i * dof, atom_j * dof] / comp  # pyright: ignore[reportOptionalSubscript]
+            delta = self._hessian[atom_i * self.dof, atom_j * self.dof] / comp
         elif delta is True:
-            # turn on contact
-            delta = self._hessian[atom_i * dof, atom_j * dof] / comp  # pyright: ignore[reportOptionalSubscript]
+            # turn on contact (reset to original value)
             if (
                 self._ff.cutoff_distance is None
                 or sq_dist <= self._ff.cutoff_distance**2
             ):
                 # TODO ff contact_pair_on
+                delta = self._hessian[atom_i * self.dof, atom_j * self.dof] / comp
                 delta += self._ff.force_constant(  # pyright: ignore[reportAssignmentType]
                     np.atleast_1d(atom_i),
                     np.atleast_1d(atom_j),
@@ -377,8 +421,8 @@ class ANM(ENMPert):
             raise ValueError("No change in interaction strength.")
 
         return (
-            slice(atom_i * dof, (atom_i + 1) * dof),
-            slice(atom_j * dof, (atom_j + 1) * dof),
+            slice(atom_i * self.dof, (atom_i + 1) * self.dof),
+            slice(atom_j * self.dof, (atom_j + 1) * self.dof),
             disp / np.sqrt(sq_dist),
             delta,
         )

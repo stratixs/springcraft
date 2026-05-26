@@ -626,7 +626,7 @@ def test_prs(file_path):
     assert np.allclose(test_sens, ref_sens)
 
 
-def test_modify_contact_pair():
+def test_modify_contact():
     """
     Tests whether permutations to the `hessian` matrix are
     performed correctly and the resulting permutations to the
@@ -707,3 +707,52 @@ def test_modify_contact_pair():
     ref_anm = springcraft.ANM(ca, ref_ff)
     assert np.allclose(test_anm.hessian, ref_anm.hessian)
     assert np.allclose(test_anm.covariance, ref_anm.covariance)
+
+
+def test_modify_atom():
+    pdb_file = pdb.PDBFile.read(join(data_dir(), "1l2y.pdb"))
+    atoms = pdb.get_structure(pdb_file, model=1)
+    ca = atoms[(atoms.atom_name == "CA") & (atoms.element == "C")]
+    ff = springcraft.TabulatedForceField.d_enm(ca)
+    test_anm = springcraft.ANM(ca, ff)
+
+    # error responses
+    assert test_anm._hessian is None
+    with pytest.raises(AttributeError, match="Interaction matrix must exist."):
+        test_anm.modify_atom(8, False)
+    test_anm.hessian
+    with pytest.raises(IndexError):
+        test_anm.modify_atom(-1, False)
+    with pytest.raises(IndexError):
+        test_anm.modify_atom(20, False)
+    with pytest.raises(ValueError):
+        test_anm.modify_atom(8, ca[8])  # no change in atom
+
+    test_anm.covariance
+    assert test_anm._covariance is not None
+
+    # turn off
+    test_anm.modify_atom(8, False)
+    ref_ff = springcraft.PatchedForceField(ff, contact_shutdown=[8])
+    ref_anm = springcraft.ANM(ca, ref_ff)
+    assert np.allclose(test_anm.hessian, ref_anm.hessian)
+    assert np.allclose(test_anm.covariance, ref_anm.covariance, atol=1e-7)
+
+    # turn on
+    test_anm.modify_atom(8, True)
+    ref_anm = springcraft.ANM(ca, ff)
+    assert np.allclose(test_anm.hessian, ref_anm.hessian)
+    assert np.allclose(test_anm.covariance, ref_anm.covariance, atol=1e-6)
+
+    # change amino acid type
+    ff = springcraft.TabulatedForceField.d_enm(ca)
+    test_anm = springcraft.ANM(ca, ff)
+    test_anm.hessian
+    test_anm.covariance
+
+    ca.res_name[8] = "LEU"
+    test_anm.modify_atom(8, ca[8])
+    ref_ff = springcraft.TabulatedForceField.d_enm(ca)
+    ref_anm = springcraft.ANM(ca, ref_ff)
+    assert np.allclose(test_anm.hessian, ref_anm.hessian)
+    assert np.allclose(test_anm.covariance, ref_anm.covariance, atol=1e-7)

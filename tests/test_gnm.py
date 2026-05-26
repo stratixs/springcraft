@@ -411,7 +411,7 @@ def test_fluctuation_dcc(file_path, cutoff):
     assert np.allclose(test_dcc_absolute, reference_dcc_absolute)
 
 
-def test_modify_contact_pair():
+def test_modify_contact():
     """
     Tests whether permutations to the `kirchhoff` matrix are
     performed correctly and the resulting permutations to the
@@ -489,6 +489,51 @@ def test_modify_contact_pair():
         [8, 8, 8, 8, 8, 8],
         [-1, -1, -1, -1, -1, -1],
     )
+    ref_gnm = springcraft.GNM(ca, ref_ff)
+    assert np.allclose(test_gnm.kirchhoff, ref_gnm.kirchhoff)
+    assert np.allclose(test_gnm.covariance, ref_gnm.covariance)
+
+
+def test_modify_atom():
+    pdb_file = pdb.PDBFile.read(join(data_dir(), "1l2y.pdb"))
+    atoms = pdb.get_structure(pdb_file, model=1)
+    ca = atoms[(atoms.atom_name == "CA") & (atoms.element == "C")]
+    ff = springcraft.TabulatedForceField.d_enm(ca)
+    test_gnm = springcraft.GNM(ca, ff)
+
+    # error responses
+    assert test_gnm._kirchhoff is None
+    with pytest.raises(AttributeError, match="Interaction matrix must exist."):
+        test_gnm.modify_atom(8, False)
+    test_gnm.kirchhoff
+    with pytest.raises(IndexError):
+        test_gnm.modify_atom(-1, False)
+    with pytest.raises(IndexError):
+        test_gnm.modify_atom(20, False)
+    with pytest.raises(ValueError):
+        test_gnm.modify_atom(8, ca[8])  # no change in atom
+
+    test_gnm.covariance
+    assert test_gnm._covariance is not None
+
+    # turn off
+    test_gnm.modify_atom(8, False)
+    print(test_gnm.kirchhoff)
+    ref_ff = springcraft.PatchedForceField(ff, contact_shutdown=[8])
+    ref_gnm = springcraft.GNM(ca, ref_ff)
+    assert np.allclose(test_gnm.kirchhoff, ref_gnm.kirchhoff)
+    assert np.allclose(test_gnm.covariance, ref_gnm.covariance)
+
+    # turn on
+    test_gnm.modify_atom(8, True)
+    ref_gnm = springcraft.GNM(ca, ff)
+    assert np.allclose(test_gnm.kirchhoff, ref_gnm.kirchhoff)
+    assert np.allclose(test_gnm.covariance, ref_gnm.covariance)
+
+    # change amino acid type
+    ca.res_name[8] = "LEU"
+    test_gnm.modify_atom(8, ca[8])
+    ref_ff = springcraft.TabulatedForceField.d_enm(ca)
     ref_gnm = springcraft.GNM(ca, ref_ff)
     assert np.allclose(test_gnm.kirchhoff, ref_gnm.kirchhoff)
     assert np.allclose(test_gnm.covariance, ref_gnm.covariance)

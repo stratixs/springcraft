@@ -15,8 +15,6 @@ import numpy.typing as npt
 from scipy.linalg import blas
 
 from springcraft.enm import ENM
-from springcraft.nma_helper import frequencies_helper
-from springcraft.utils import eigenvalue_update
 
 ger = blas.get_blas_funcs("ger", dtype=np.float64)
 
@@ -68,46 +66,16 @@ class ENMPert(ENM):
         )
 
         if self._covariance is not None:
-            # fmt: off
-            x = slice_t @ self._covariance[slice_i, :] - slice_t @ self._covariance[slice_j, :]
-            beta = 1 + delta * slice_t @ (x[slice_i] - x[slice_j])
+            self._modify_covariance(slice_i, slice_j, slice_t, delta)
 
-            t = self._interactions[slice_j] @ x + self._interactions[slice_i] @ x
-            if np.abs(beta) < 1e-9:
-                # rank increase
-                cov_mul_diff = self._covariance @ x
-                x_dot = x @ x
-                alpha = (x @ cov_mul_diff) / (x_dot**2)
-
-                ger(alpha=1/-x_dot, x=x, y=cov_mul_diff, a=self._covariance.T, overwrite_a=True)  # pyright: ignore[reportCallIssue]
-                ger(alpha=1/-x_dot, x=cov_mul_diff, y=x, a=self._covariance.T, overwrite_a=True)  # pyright: ignore[reportCallIssue]
-                ger(alpha=alpha, x=x, y=x, a=self._covariance.T, overwrite_a=True)  # pyright: ignore[reportCallIssue]
-            elif np.linalg.norm(t, ord=np.inf) > 1e-9:
-                # rank decrease
-                y = -self._interactions @ x
-                y[slice_i] += slice_t
-                y[slice_j] -= slice_t
-                y_dot = y @ y
-
-                ger(alpha=1/-y_dot, x=x, y=y, a=self._covariance.T, overwrite_a=True)  # pyright: ignore[reportCallIssue]
-                ger(alpha=1/-y_dot, x=y, y=x, a=self._covariance.T, overwrite_a=True)  # pyright: ignore[reportCallIssue]
-                ger(alpha=beta/(delta * y_dot * y_dot), x=y, y=y, a=self._covariance.T, overwrite_a=True)  # pyright: ignore[reportCallIssue]
-            else:
-                # normal case: no rank change
-                ger(alpha=-delta/beta, x=x, y=x, a=self._covariance.T, overwrite_a=True)  # pyright: ignore[reportCallIssue]
-
-        # update interaction matrix
-        tensor = np.outer(delta * slice_t, slice_t)
-        self._interactions[slice_i, slice_j] -= tensor
-        self._interactions[slice_j, slice_i] -= tensor
-        self._interactions[slice_i, slice_i] += tensor
-        self._interactions[slice_j, slice_j] += tensor
+        self._modify_interactions(slice_i, slice_j, slice_t, delta)
 
         # invalidate deoendant values
         self._eigen_values = None
         self._eigen_vectors = None
 
-    def modify_atom(self, atom_i, new_atom, skip_checks=False):
+    @abstractmethod
+    def modify_atom(self, atom_i: int, new_atom: bool | struc.Atom):
         """
         Modifies the force constants in the `interation` matrix between the
         `atom_i` and all its adjacent atoms. An atom is defined as adjacent
@@ -142,32 +110,82 @@ class ENMPert(ENM):
             If the `interaction` matrix does not exist.
         IndexError
             If any indices are out of bounds for the initialized structure.
-        TypeError
-            If `delta` is neither a bool nor an Atom.
+        ValueError
+            If new Atom does not change any force constants.
         """
-        if not skip_checks:
-            if self._interactions is None:
-                raise AttributeError("Interaction matrix must exist.")
-            if atom_i < 0 or atom_i >= self._natoms:
-                raise IndexError(
-                    f"Index out of bounds for a structure of length {self._natoms}"
-                )
-            if not isinstance(new_atom, (bool, struc.Atom)):
-                raise TypeError(f"Atom must be bool or Atom but was {type(new_atom)}")
+        if self._interactions is None:
+            raise AttributeError("Interaction matrix must exist.")
+        if atom_i < 0 or atom_i >= self._natoms:
+            raise IndexError(
+                f"atom_i={atom_i} is out of bounds for structure of length {self._natoms}."
+            )
+        if isinstance(new_atom, struc.Atom) and not self._ff.update(atom_i, new_atom):
+            raise ValueError("No change in atom detected.")
 
-        if isinstance(new_atom, bool):
-            delta = new_atom
-        else:  # new_atom is Atom
-            if not self._ff.update(atom_i, new_atom, skip_checks=True):
-                return  # ForceField did not change
-            delta = True
+    def _modify_interactions(
+        self,
+        slice_i: int | np.intp | slice,
+        slice_j: int | np.intp | slice,
+        slice_t: None | np.ndarray,
+        delta: float,
+    ):
+        if slice_t is None:
+            tensor = delta
+        else:
+            tensor = np.outer(delta * slice_t, slice_t)
+        self._interactions[slice_i, slice_j] -= tensor
+        self._interactions[slice_j, slice_i] -= tensor
+        self._interactions[slice_i, slice_i] += tensor
+        self._interactions[slice_j, slice_j] += tensor
 
-        length = self._natoms
-        atom_j = np.arange(length - 1)
-        atom_j[atom_i:] = np.arange(atom_i + 1, length)
-        self.modify_contact(
-            np.repeat(atom_i, length - 1), atom_j, delta, skip_checks=True
-        )
+    def _modify_covariance(
+        self,
+        slice_i: int | np.intp | slice,
+        slice_j: int | np.intp | slice,
+        slice_t: None | np.ndarray,
+        delta: float,
+    ):
+        # fmt: off
+        if slice_t is None:
+            slice_t = 1
+            x = self._covariance[slice_i, :] - self._covariance[slice_j, :]
+            beta = 1 + delta * (x[slice_i] - x[slice_j])
+        else:
+            x = slice_t @ self._covariance[slice_i, :] - slice_t @ self._covariance[slice_j, :]
+            beta = 1 + delta * slice_t @ (x[slice_i] - x[slice_j])
+
+        if np.abs(beta) < 1e-6:
+            # rank decrease
+            cov_mul_diff = self._covariance @ x
+            x_dot = x @ x
+            alpha = (x @ cov_mul_diff) / (x_dot**2)
+
+            ger(alpha=1 / -x_dot, x=x, y=cov_mul_diff, a=self._covariance.T, overwrite_a=True)  # pyright: ignore[reportCallIssue]
+            ger(alpha=1 / -x_dot, x=cov_mul_diff, y=x, a=self._covariance.T, overwrite_a=True)  # pyright: ignore[reportCallIssue]
+            ger(alpha=alpha, x=x, y=x, a=self._covariance.T, overwrite_a=True)  # pyright: ignore[reportCallIssue]
+            return
+
+        t = self._interactions[slice_j] @ x + self._interactions[slice_i] @ x
+        if np.max(np.abs(t)) < 1e-6:
+            # normal case: no rank change
+            ger(alpha=-delta / beta, x=x, y=x, a=self._covariance.T, overwrite_a=True)  # pyright: ignore[reportCallIssue]
+            return
+
+        y = -self._interactions @ x
+        y[slice_i] += slice_t
+        y[slice_j] -= slice_t
+        y_dot = y @ y
+        if y_dot < 1e-6:
+            # still normal case but with more precision
+            ger(alpha=-delta / beta, x=x, y=x, a=self._covariance.T, overwrite_a=True)  # pyright: ignore[reportCallIssue]
+            return
+
+        else:
+            # rank increase
+            ger(alpha=1 / -y_dot, x=x, y=y, a=self._covariance.T, overwrite_a=True)  # pyright: ignore[reportCallIssue]
+            ger(alpha=1 / -y_dot, x=y, y=x, a=self._covariance.T, overwrite_a=True)  # pyright: ignore[reportCallIssue]
+            ger(alpha=beta / (delta * y_dot * y_dot), x=y, y=y, a=self._covariance.T, overwrite_a=True)  # pyright: ignore[reportCallIssue]
+            return
 
     @abstractmethod
     def _prepare_one_rank_update(
