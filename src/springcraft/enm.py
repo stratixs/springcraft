@@ -67,8 +67,6 @@ class ENM(ABC):
         The mass for each atom, `None` if no mass weighting is applied.
     """
 
-    # istores squared distances between atoms if below the ff cutoff distance, otherwise 0
-    _adjacency: np.ndarray | None
     # euclidean coordinates of each atom
     _coord: np.ndarray
     # pseudo-inverse of the _interaction matrix
@@ -157,6 +155,16 @@ class ENM(ABC):
         self._eigen_vectors = None
 
         self._on_covariance_set()
+
+    @property
+    def has_covariance(self) -> bool:
+        """
+        Returns
+        -------
+        has_covariance : bool
+            Whether the covariance is already calculated.
+        """
+        return self._covariance is not None
 
     @property
     @abstractmethod
@@ -514,7 +522,7 @@ class ENM(ABC):
                         # atom already on
                         continue
 
-                    disp = coord[atom_i] - coord[atom_j]
+                    disp = coord[atom_j] - coord[atom_i]
                     sq_dist = np.dot(disp, disp)
                     sq_dist_matrix[atom_i, atom_j] = sq_dist
                     sq_dist_matrix[atom_j, atom_i] = sq_dist

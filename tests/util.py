@@ -1,20 +1,39 @@
 from os.path import dirname, join, realpath
 
 import biotite.structure as struc
+import biotite.structure.io.pdbx as pdbx
 import numpy as np
 import numpy.typing as npt
 from scipy.sparse import coo_matrix
 from typing_extensions import override
 
-from springcraft import ForceField
-from springcraft.forcefield import PatchedForceField
+import springcraft
 
 
 def data_dir():
     return join(dirname(realpath(__file__)), "data")
 
 
-class ModifiedForceField(ForceField):
+def load_protein_structure(pdb_id: str) -> struc.AtomArray:
+    file_path = join(dirname(realpath(__file__)), "data", pdb_id + ".cif")
+    cif_file = pdbx.CIFFile.read(file_path)
+    atoms = pdbx.get_structure(cif_file, model=1)
+    return atoms[(atoms.atom_name == "CA") & (atoms.element == "C")]  # pyright: ignore[reportReturnType, reportIndexIssue]
+
+
+def prepare_gnm(pdb_id: str, cutoff: float | int) -> springcraft.GNM:
+    ca = load_protein_structure(pdb_id)
+    ff = springcraft.InvariantForceField(cutoff)
+    return springcraft.GNM(ca, ff)
+
+
+def prepare_anm(pdb_id: str, cutoff: float | int) -> springcraft.ANM:
+    ca = load_protein_structure(pdb_id)
+    ff = springcraft.InvariantForceField(cutoff)
+    return springcraft.ANM(ca, ff)
+
+
+class ModifiedForceField(springcraft.ForceField):
     """
     Modifies force constant (`i`, `j`) of initial ForceField by `delta`.
     Does not work stacked with itself or a PatchedForceField.
@@ -22,13 +41,13 @@ class ModifiedForceField(ForceField):
 
     def __init__(
         self,
-        ff: ForceField,
+        ff: springcraft.ForceField,
         natoms: int,
         atom_i: npt.ArrayLike,
         atom_j: npt.ArrayLike,
         delta: npt.ArrayLike,
     ):
-        assert not isinstance(ff, (PatchedForceField, ModifiedForceField))
+        assert not isinstance(ff, (springcraft.PatchedForceField, ModifiedForceField))
         self._ff = ff
         atom_i = np.atleast_1d(np.asarray(atom_i))
         atom_j = np.atleast_1d(np.asarray(atom_j))

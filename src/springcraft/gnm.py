@@ -9,7 +9,6 @@ __all__ = ["GNM"]
 
 import biotite.structure as struc
 import numpy as np
-import numpy.typing as npt
 from typing_extensions import Literal, Union, overload, override
 
 from springcraft.enm_pert import ENMPert

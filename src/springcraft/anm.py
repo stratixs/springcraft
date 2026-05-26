@@ -9,7 +9,6 @@ __all__ = ["ANM"]
 
 import biotite.structure as struc
 import numpy as np
-import numpy.typing as npt
 from typing_extensions import Literal, Union, overload, override
 
 from springcraft import nma
