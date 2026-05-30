@@ -13,6 +13,7 @@ from typing_extensions import Literal, Union, overload, override
 
 from springcraft.enm import ENM
 from springcraft.forcefield import ForceField
+from springcraft.interaction import compute_kirchhoff
 
 
 class GNM(ENM):
@@ -85,15 +86,9 @@ class GNM(ENM):
     def kirchhoff(self) -> np.ndarray:
         if self._kirchhoff is None:
             if self._covariance is None:
-                atom_i, atom_j, _, sq_dist = self._calc_adjacency()
-                force_constants = self._ff.force_constant(atom_i, atom_j, sq_dist)
-
-                self._kirchhoff = np.zeros((self._natoms, self._natoms))
-                self._kirchhoff[atom_i, atom_j] = -force_constants
-
-                # Set values for main diagonal
-                np.fill_diagonal(self._kirchhoff, -np.sum(self._kirchhoff, axis=0))
-
+                self._kirchhoff, _ = compute_kirchhoff(
+                    self._coord, self._ff, self._use_cell_list
+                )
                 if self._mass_weight_matrix is not None:
                     self._kirchhoff *= self._mass_weight_matrix
             else:
@@ -169,7 +164,7 @@ class GNM(ENM):
             The mask of non zero eigenvalues.
             Only returned if ``zero_mask`` is set.
         """
-        self.kirchhoff
+        self.kirchhoff  # calc kirchhoff if non-existant
         return super().eigen(zero_mask, copy)
 
     @property

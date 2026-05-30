@@ -148,7 +148,7 @@ def mean_square_fluctuation(
         if mode_subset is not None:
             mode_subset = (
                 np.arange(0, len(eig_vectors[0]))
-                .reshape(-1, enm.dof_per_node)[mode_subset]
+                .reshape(-1, enm.dof)[mode_subset]
                 .flatten()
             )
             eig_vectors = eig_vectors[mode_subset]
@@ -156,7 +156,7 @@ def mean_square_fluctuation(
         eig_inv = np.zeros_like(eig_values)
         eig_inv = np.divide(1, eig_values, where=eig_zero_mask, out=eig_inv)
         msqf = np.square(eig_vectors) @ eig_inv
-        msqf = msqf.reshape(-1, enm.dof_per_node).sum(axis=1)
+        msqf = msqf.reshape(-1, enm.dof).sum(axis=1)
 
     # Temperature weighting
     if tem is None:

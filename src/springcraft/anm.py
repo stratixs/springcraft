@@ -14,6 +14,7 @@ from typing_extensions import Literal, Union, overload, override
 from springcraft import nma
 from springcraft.enm import ENM
 from springcraft.forcefield import ForceField
+from springcraft.interaction import compute_hessian
 
 
 class ANM(ENM):
@@ -85,25 +86,9 @@ class ANM(ENM):
     def hessian(self) -> np.ndarray:
         if self._hessian is None:
             if self._covariance is None:
-                atom_i, atom_j, disp, sq_dist = self._calc_adjacency()
-                force_constants = self._ff.force_constant(atom_i, atom_j, sq_dist)
-
-                self._hessian = np.zeros((self._natoms, self._natoms, 3, 3))
-                self._hessian[atom_i, atom_j] = (
-                    -force_constants[:, np.newaxis, np.newaxis]
-                    / sq_dist[:, np.newaxis, np.newaxis]
-                    * disp[:, :, np.newaxis]
-                    * disp[:, np.newaxis, :]
+                self._hessian, _ = compute_hessian(
+                    self._coord, self._ff, self._use_cell_list
                 )
-                # Set values for main diagonal
-                indices = np.arange(self._natoms)
-                self._hessian[indices, indices] = -np.sum(self._hessian, axis=0)
-
-                # Reshape to (20*3, 20*3) matrix
-                self._hessian = np.transpose(self._hessian, (0, 2, 1, 3)).reshape(
-                    self._natoms * 3, self._natoms * 3
-                )
-
                 if self._mass_weight_matrix is not None:
                     self._hessian *= self._mass_weight_matrix
             else:
@@ -114,10 +99,10 @@ class ANM(ENM):
 
     @hessian.setter
     def hessian(self, value: np.ndarray):
-        if value.shape != (self._natoms * 3, self._natoms * 3):
+        if value.shape != (self._natoms * self.dof, self._natoms * self.dof):
             raise IndexError(
                 f"Expected shape "
-                f"{(self._natoms * 3, self._natoms * 3)}, "
+                f"{(self._natoms * self.dof, self._natoms * self.dof)}, "
                 f"got {value.shape}"
             )
         self._hessian = value
@@ -181,7 +166,7 @@ class ANM(ENM):
             The mask of non zero eigenvalues.
             Only returned if ``zero_mask`` is set.
         """
-        self.hessian
+        self.hessian  # calc hessian if non-existant
         return super().eigen(zero_mask, copy)
 
     def normal_mode(

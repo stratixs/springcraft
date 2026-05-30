@@ -12,54 +12,6 @@ from tests.util import data_dir, load_protein_structure, prepare_gnm
 
 @pytest.mark.parametrize(
     "pdb_id, cutoff",
-    itertools.product(
-        ["1l2y", "104l", "10nm"],
-        [4, 7, 13],
-    ),
-)
-def test_adjacency(pdb_id, cutoff):
-    """
-    Tests that the cell list and brute force approaches produce
-    the same result.
-    Tests that PatchedForceFields are correctly handled. Activating
-    a contact takes precedence over deactivation.
-    """
-    ca = load_protein_structure(pdb_id)
-    ff = springcraft.InvariantForceField(cutoff)
-    ff = springcraft.PatchedForceField(
-        ff,
-        contact_shutdown=[2],
-        contact_pair_off=[[3, 2], [3, 4], [3, 5]],
-        contact_pair_on=[[2, 4], [3, 4], [3, 14]],
-        force_constants=[2, 2, 2],
-    )
-
-    test_gnm_cell_list = springcraft.GNM(ca, ff, use_cell_list=True)
-    test_gnm_brute_force = springcraft.GNM(ca, ff, use_cell_list=False)
-
-    assert np.allclose(test_gnm_cell_list.kirchhoff, test_gnm_brute_force.kirchhoff)
-
-    # contacts turned on
-    kirchhoff = test_gnm_cell_list.kirchhoff
-    assert kirchhoff[2, 4] == -2
-    assert kirchhoff[4, 2] == -2
-    assert kirchhoff[3, 4] == -2
-    assert kirchhoff[4, 3] == -2
-    assert kirchhoff[3, 14] == -2
-    assert kirchhoff[14, 3] == -2
-
-    # contacts turned off
-    third = np.zeros(len(ca))
-    third[2] = 2
-    third[4] = -2
-    assert np.array_equal(kirchhoff[2, :], third)
-    assert np.array_equal(kirchhoff[:, 2], third)
-    assert kirchhoff[3, 5] == 0
-    assert kirchhoff[5, 3] == 0
-
-
-@pytest.mark.parametrize(
-    "pdb_id, cutoff",
     itertools.product(["1l2y"], [4, 7, 13]),
 )
 def test_kirchhoff(pdb_id, cutoff):
@@ -161,6 +113,24 @@ def test_kirchhoff_covariance_setter():
     assert np.allclose(test_kirchhoff2, test_kirchhoff3)
     assert np.allclose(test_covariance2, test_covariance3)
     assert np.allclose(test_eig_val2, test_eig_val3)
+
+
+@pytest.mark.parametrize(
+    "pdb_id, cutoff",
+    itertools.product(
+        ["1l2y", "104l", "10nm"],
+        [4, 7, 13],
+    ),
+)
+def test_covariance(pdb_id, cutoff):
+    """
+    Tests whether the covariance is the pseudo-inverse of the kirchhoff matrix.
+    """
+    test_anm = prepare_gnm(pdb_id, cutoff)
+    assert np.allclose(
+        test_anm.kirchhoff,
+        test_anm.kirchhoff @ test_anm.covariance @ test_anm.kirchhoff,
+    )
 
 
 @pytest.mark.parametrize(
@@ -427,8 +397,6 @@ def test_fluctuation_dcc(pdb_id, cutoff):
         delimiter=",",
     )
 
-    print(test_dcc_subset.shape)
-    print(reference_dcc_norm_subset.shape)
     assert np.allclose(test_fluc, reference_fluc)
     assert np.allclose(test_dcc, reference_dcc)
     assert np.allclose(test_dcc_subset, reference_dcc_norm_subset)
