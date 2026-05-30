@@ -74,25 +74,19 @@ def frequencies(enm) -> np.ndarray:
         The frequency in ascending order of the associated modes'
         Eigenvalues.
     """
-    from .anm import ANM
-    from .gnm import GNM
+    from springcraft.enm import ENM
 
-    if isinstance(enm, GNM):
-        ntriv_modes = 1
-    elif isinstance(enm, ANM):
-        ntriv_modes = 6
-    else:
-        raise ValueError("Instance of GNM/ANM class expected.")
+    if not isinstance(enm, ENM):
+        raise ValueError("Instance of ENM class expected.")
 
-    eig_values, _ = enm.eigen()
+    eig_values, _, n_triv = enm.eigen(n_zero=True, copy=False)
 
     # The very first / first six Eigenvalue(s) is/are usually close to 0;
     # but can have a negative sign.
-    eig_values[0:ntriv_modes] = np.abs(eig_values[0:ntriv_modes])
+    eig_values = eig_values.copy()
+    eig_values[:n_triv] = np.abs(eig_values[:n_triv])
 
-    freq = 1 / (2 * np.pi) * np.sqrt(eig_values)
-
-    return freq
+    return 1 / (2 * np.pi) * np.sqrt(eig_values)
 
 
 def mean_square_fluctuation(
@@ -128,42 +122,50 @@ def mean_square_fluctuation(
     msqf : ndarray, shape=(n,), dtype=float
         The mean square fluctuations for each atom in the model.
     """
-    from springcraft.enm import ENM
+    from springcraft.anm import ANM
+    from springcraft.gnm import GNM
 
-    if not isinstance(enm, ENM):
-        raise ValueError("Instance of ENM class expected.")
+    if not isinstance(enm, (GNM, ANM)):
+        raise ValueError("Instance of GNM/ANM class expected.")
 
-    if enm.has_covariance:
-        msqf = np.diag(enm.covariance)
+    eig_values, eig_vectors = enm.eigen()
 
-        if mode_subset is None:
-            msqf = msqf.reshape(-1, enm.dof_per_node).sum(axis=1)
-        else:
-            msqf = msqf.reshape(-1, enm.dof_per_node)[mode_subset].sum(axis=1)
+    if isinstance(enm, ANM):
+        # Eigenvectors: 3N -> N
+        cols_n = np.arange(0, len(eig_vectors[0]), 3)
+        eig_vectors = np.add.reduceat(np.square(eig_vectors), cols_n, axis=1)
+        ntriv_modes = 6
+    # -> GNMs
     else:
-        # calculate covariance diagonal elements
-        eig_values, eig_vectors, eig_zero_mask = enm.eigen(copy=False, zero_mask=True)
-        eig_vectors = eig_vectors.T
+        eig_vectors = np.square(eig_vectors)
+        ntriv_modes = 1
 
-        if mode_subset is not None:
-            mode_subset = (
-                np.arange(0, len(eig_vectors[0]))
-                .reshape(-1, enm.dof)[mode_subset]
-                .flatten()
-            )
-            eig_vectors = eig_vectors[mode_subset]
+    # Choose modes included in computation; raise error, if trivial
+    # modes are included
+    if mode_subset is None:
+        mode_subset = np.arange(ntriv_modes, len(eig_values))
+    elif any(mode_subset <= (ntriv_modes - 1)):
+        raise ValueError(
+            "Trivial modes are included in the current selection."
+            " Please check your input."
+        )
 
-        eig_inv = np.zeros_like(eig_values)
-        eig_inv = np.divide(1, eig_values, where=eig_zero_mask, out=eig_inv)
-        msqf = np.square(eig_vectors) @ eig_inv
-        msqf = msqf.reshape(-1, enm.dof).sum(axis=1)
+    eig_values = eig_values[mode_subset]
+    eig_vectors = eig_vectors[mode_subset]
+
+    # Adjust shape of eig_values (N,) -> (N, 1)
+    eig_values = eig_values.reshape(eig_values.shape[0], 1)
+    # Eigenvecs in distinct rows; divide by associated
+    # squared Eigenvalues
+    sq_div_eig_vectors = np.sum(eig_vectors / eig_values, axis=0)
 
     # Temperature weighting
     if tem is None:
         tem_scaling = 1
     else:
         tem_scaling = tem * tem_factors
-    msqf = msqf * tem_scaling
+
+    msqf = sq_div_eig_vectors * tem_scaling
 
     return msqf
 
@@ -281,8 +283,8 @@ def dcc(
     for 'mode_subset' and 'memory_efficient' are passed to the function.
     """
 
-    from .anm import ANM
-    from .gnm import GNM
+    from springcraft.anm import ANM
+    from springcraft.gnm import GNM
 
     eig_values, eig_vectors = enm.eigen()
     n_nodes = len(enm._coord)
@@ -391,7 +393,7 @@ def normal_mode(
         Atom displacements that depict a single oscillation.
         *m* is the number of frames.
     """
-    from .anm import ANM
+    from springcraft.anm import ANM
 
     if not isinstance(anm, ANM):
         raise ValueError("Instance of ANM class expected.")
@@ -446,7 +448,7 @@ def linear_response(anm, force: np.ndarray) -> np.ndarray:
         Linear Response Theory."
         Phys Rev Lett. 94, 7, 078102 (2005).
     """
-    from .anm import ANM
+    from springcraft.anm import ANM
 
     if not isinstance(anm, ANM):
         raise ValueError("Instance of ANM class expected.")
@@ -500,7 +502,7 @@ def prs(anm, norm: bool = True) -> np.ndarray:
         Mechanisms of Ferric Binding Protein."
         PLoS Comput Biol 5(10) (2009).
     """
-    from .anm import ANM
+    from springcraft.anm import ANM
 
     if not isinstance(anm, ANM):
         raise ValueError("Instance of ANM class expected.")

@@ -180,41 +180,41 @@ def test_eigen_parameters():
     cutoff = 7
     test_gnm = prepare_gnm(pdb_id, cutoff)
 
-    eig_val1, eig_vec1 = test_gnm.eigen(copy=False, zero_mask=False)
+    eig_val1, eig_vec1 = test_gnm.eigen(copy=False, n_zero=False)
     eig_val1[1] = 3
     eig_vec1[1, 1] = 3
-    eig_val2, eig_vec2 = test_gnm.eigen(copy=False, zero_mask=False)
+    eig_val2, eig_vec2 = test_gnm.eigen(copy=False, n_zero=False)
     assert np.array_equal(eig_val1, eig_val2)
     assert np.array_equal(eig_vec1, eig_vec2)
 
     test_gnm = prepare_gnm(pdb_id, cutoff)
 
-    eig_val1, eig_vec1 = test_gnm.eigen(copy=True, zero_mask=False)
+    eig_val1, eig_vec1 = test_gnm.eigen(copy=True, n_zero=False)
     eig_val1[1] = 3
     eig_vec1[1, 1] = 3
-    eig_val2, eig_vec2 = test_gnm.eigen(copy=True, zero_mask=False)
+    eig_val2, eig_vec2 = test_gnm.eigen(copy=True, n_zero=False)
     assert not np.array_equal(eig_val1, eig_val2)
     assert not np.array_equal(eig_vec1, eig_vec2)
 
     test_gnm = prepare_gnm(pdb_id, cutoff)
 
-    eig_val1, eig_vec1, eig_zero_mask1 = test_gnm.eigen(copy=False, zero_mask=True)
+    eig_val1, eig_vec1, eig_n_zero1 = test_gnm.eigen(copy=False, n_zero=True)
     eig_val1[1] = 3
     eig_vec1[1, 1] = 3
-    eig_val2, eig_vec2, eig_zero_mask2 = test_gnm.eigen(copy=False, zero_mask=True)
+    eig_val2, eig_vec2, eig_n_zero2 = test_gnm.eigen(copy=False, n_zero=True)
     assert np.array_equal(eig_val1, eig_val2)
     assert np.array_equal(eig_vec1, eig_vec2)
-    assert np.array_equal(eig_zero_mask1, eig_zero_mask2)
+    assert eig_n_zero1 == eig_n_zero2
 
     test_gnm = prepare_gnm(pdb_id, cutoff)
 
-    eig_val1, eig_vec1, eig_zero_mask1 = test_gnm.eigen(copy=True, zero_mask=True)
+    eig_val1, eig_vec1, eig_n_zero1 = test_gnm.eigen(copy=True, n_zero=True)
     eig_val1[1] = 3
     eig_vec1[1, 1] = 3
-    eig_val2, eig_vec2, eig_zero_mask2 = test_gnm.eigen(copy=True, zero_mask=True)
+    eig_val2, eig_vec2, eig_n_zero2 = test_gnm.eigen(copy=True, n_zero=True)
     assert not np.array_equal(eig_val1, eig_val2)
     assert not np.array_equal(eig_vec1, eig_vec2)
-    assert np.array_equal(eig_zero_mask1, eig_zero_mask2)
+    assert eig_n_zero1 == eig_n_zero2
 
 
 @pytest.mark.parametrize(

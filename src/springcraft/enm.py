@@ -135,9 +135,10 @@ class ENM(ABC):
         if self._covariance is None:
             # same algorithm as linalg.pinv
             # but we want to store calculates eigenvalues in the process
-            s, u, zero_mask = self.eigen(zero_mask=True, copy=False)
+            s, u, n_zero = self.eigen(n_zero=True, copy=False)
 
-            si = np.divide(1, s, where=zero_mask, out=np.zeros_like(s))
+            si = np.zeros_like(s)
+            si[n_zero:] = 1 / s[n_zero:]
 
             self._covariance = u.T @ np.multiply(si[..., np.newaxis], u)
 
@@ -173,19 +174,17 @@ class ENM(ABC):
 
     @overload
     def eigen(
-        self, zero_mask: Literal[False] = False, copy: bool = True
+        self, n_zero: Literal[False] = False, copy: bool = True
     ) -> tuple[np.ndarray, np.ndarray]: ...
 
     @overload
     def eigen(
-        self, zero_mask: Literal[True], copy: bool = True
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]: ...
+        self, n_zero: Literal[True], copy: bool = True
+    ) -> tuple[np.ndarray, np.ndarray, int]: ...
 
     def eigen(
-        self, zero_mask=False, copy=True
-    ) -> Union[
-        tuple[np.ndarray, np.ndarray], tuple[np.ndarray, np.ndarray, np.ndarray]
-    ]:
+        self, n_zero=False, copy=True
+    ) -> Union[tuple[np.ndarray, np.ndarray], tuple[np.ndarray, np.ndarray, int]]:
         """
         Compute or fetch the Eigenvalues and Eigenvectors of the
         *interaction* matrix.
@@ -196,8 +195,9 @@ class ENM(ABC):
 
         Parameters
         ----------
-        zero_mask : bool, optional, default=False
-            Whether to return a mask of non-zero eigenvalues.
+        n_zero : bool, optional, default=False
+            Whether to return number of zero eigenvalues.
+            These are the first eigenvalues.
         copy : bool, optional, default=True
             Whether to return the eigenvalues and eigenvectors as copies.
             If you choose not to return copies a modification to these
@@ -205,19 +205,41 @@ class ENM(ABC):
 
         Returns
         -------
-        eig_values : ndarray, shape=(k,), dtype=float
+        eigen_values : ndarray, shape=(k,), dtype=float
             Eigenvalues of the matrix in ascending order.
-        eig_vectors : ndarray, shape=(k,n), dtype=float
+        eigen_vectors : ndarray, shape=(k,n), dtype=float
             Eigenvectors of the matrix.
             ``eig_values[i]`` corresponds to ``eigenvectors[i]``.
-        zero_mask : ndarray, shape(k,), dtype=bool, optional
-            The mask of non zero eigenvalues.
-            Only returned if ``zero_mask`` is set.
+        eigen_n_zero : int, optional
+            The number of the (first) zero eigenvalues.
+            Only returned if ``n_zero`` is set.
         """
         if self._eigen_values is None or self._eigen_vectors is None:
             assert self._interactions is not None  # should never happen
 
             self._eigen_values, self._eigen_vectors = np.linalg.eigh(self._interactions)
+
+            threshhold = 1e-9 * self._eigen_values[-1]  # max(eig_val) * 10^-9
+
+            i = 0
+            while self._eigen_values[i] < -threshhold:
+                i = i + 1
+            n_neg = i
+            while self._eigen_values[i] <= threshhold:
+                i = i + 1
+            n_triv = i + n_neg
+
+            if n_neg:
+                # numerical error with some eigenvalues below 0
+                v, V, n, m = self._eigen_values, self._eigen_vectors, n_neg, n_triv
+                v[:m], v[m : m + n] = v[n : n + m].copy(), v[:n].copy()
+                V[:, :m], V[:, m : m + n] = V[:, n : n + m].copy(), V[:, :n].copy()
+
+                raise RuntimeWarning(
+                    "Numerical error during EigenValue calculation. Some analysis might fail."
+                )
+
+            self._eigen_n_zero = n_triv
 
         val = self._eigen_values
         vec = self._eigen_vectors.T
@@ -225,10 +247,8 @@ class ENM(ABC):
             val = val.copy()
             vec = vec.copy()
 
-        if zero_mask:
-            threshhold = 1e-12 * self._eigen_values[-1]  # max(eig_val) * 10^-12
-            mask = np.abs(self._eigen_values) > threshhold
-            return val, vec, mask
+        if n_zero:
+            return val, vec, self._eigen_n_zero
 
         return val, vec
 
