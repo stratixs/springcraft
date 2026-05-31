@@ -318,42 +318,35 @@ def test_mean_square_fluctuation():
     cutoff = 7.0
 
     # test full set
-    test_gnm = prepare_anm(pdb_id, cutoff)
-    test_gnm.hessian
-    assert test_gnm._covariance is None
+    test_anm = prepare_anm(pdb_id, cutoff)
+    test_anm.hessian
+    assert test_anm._covariance is None
     # calc with eigvecs
-    msqf_eig_full = test_gnm.mean_square_fluctuation()
-    test_gnm.covariance
-    assert test_gnm._covariance is not None
+    msqf_eig_full = test_anm.mean_square_fluctuation()
+    test_anm.covariance
+    assert test_anm._covariance is not None
     # read covariance
-    msqf_cov_full = test_gnm.mean_square_fluctuation()
+    msqf_cov_full = test_anm.mean_square_fluctuation()
     assert np.allclose(msqf_eig_full, msqf_cov_full)
 
     # test small subset
-    subset = np.array([3, 17, 13])
-    test_gnm = prepare_anm(pdb_id, cutoff)
-    test_gnm.hessian
-    assert test_gnm._covariance is None
-    # calc with eigvecs
-    msqf_eig_subset = test_gnm.mean_square_fluctuation(mode_subset=subset)
-    assert np.allclose(msqf_eig_subset, msqf_eig_full[subset])
-    test_gnm.covariance
-    assert test_gnm._covariance is not None
-    # read covariance
-    msqf_cov_subset = test_gnm.mean_square_fluctuation(mode_subset=subset)
-    assert np.allclose(msqf_eig_subset, msqf_cov_subset)
+    test_anm = prepare_anm(pdb_id, cutoff)
+    test_anm.hessian
+    with pytest.raises(ValueError, match="Trivial"):
+        test_anm.mean_square_fluctuation(mode_subset=np.array([6, 13]))
+    test_anm.mean_square_fluctuation(mode_subset=np.array([7, 59]))
 
     # test temp scaling
-    test_gnm = prepare_anm(pdb_id, cutoff)
-    test_gnm.hessian
-    assert test_gnm._covariance is None
+    test_anm = prepare_anm(pdb_id, cutoff)
+    test_anm.hessian
+    assert test_anm._covariance is None
     # calc with eigvecs
-    msqf_eig_temp = test_gnm.mean_square_fluctuation(tem=300)
+    msqf_eig_temp = test_anm.mean_square_fluctuation(tem=300)
     assert np.allclose(msqf_eig_temp, 300 * 1.380649e-23 * msqf_eig_full)
-    test_gnm.covariance
-    assert test_gnm._covariance is not None
+    test_anm.covariance
+    assert test_anm._covariance is not None
     # read covariance
-    msqf_cov_temp = test_gnm.mean_square_fluctuation(tem=300)
+    msqf_cov_temp = test_anm.mean_square_fluctuation(tem=300)
     assert np.allclose(msqf_eig_temp, msqf_cov_temp)
 
 
@@ -365,42 +358,35 @@ def test_bfactor():
     cutoff = 7.0
 
     # test full set
-    test_gnm = prepare_anm(pdb_id, cutoff)
-    test_gnm.hessian
-    assert test_gnm._covariance is None
+    test_anm = prepare_anm(pdb_id, cutoff)
+    test_anm.hessian
+    assert test_anm._covariance is None
     # calc with eigvecs
-    bfactor_eig_full = test_gnm.bfactor()
-    test_gnm.covariance
-    assert test_gnm._covariance is not None
+    bfactor_eig_full = test_anm.bfactor()
+    test_anm.covariance
+    assert test_anm._covariance is not None
     # read covariance
-    bfactor_cov_full = test_gnm.bfactor()
+    bfactor_cov_full = test_anm.bfactor()
     assert np.allclose(bfactor_eig_full, bfactor_cov_full)
 
     # test small subset
-    subset = np.array([3, 17, 13])
-    test_gnm = prepare_anm(pdb_id, cutoff)
-    test_gnm.hessian
-    assert test_gnm._covariance is None
-    # calc with eigvecs
-    bfactor_eig_subset = test_gnm.bfactor(mode_subset=subset)
-    assert np.allclose(bfactor_eig_subset, bfactor_eig_full[subset])
-    test_gnm.covariance
-    assert test_gnm._covariance is not None
-    # read covariance
-    bfactor_cov_subset = test_gnm.bfactor(mode_subset=subset)
-    assert np.allclose(bfactor_eig_subset, bfactor_cov_subset)
+    test_anm = prepare_anm(pdb_id, cutoff)
+    test_anm.hessian
+    with pytest.raises(ValueError, match="Trivial"):
+        test_anm.bfactor(mode_subset=np.array([6, 13]))
+    test_anm.bfactor(mode_subset=np.array([7, 59]))
 
     # test temp scaling
-    test_gnm = prepare_anm(pdb_id, cutoff)
-    test_gnm.hessian
-    assert test_gnm._covariance is None
+    test_anm = prepare_anm(pdb_id, cutoff)
+    test_anm.hessian
+    assert test_anm._covariance is None
     # calc with eigvecs
-    bfactor_eig_temp = test_gnm.bfactor(tem=300)
+    bfactor_eig_temp = test_anm.bfactor(tem=300)
     assert np.allclose(bfactor_eig_temp, 300 * 1.380649e-23 * bfactor_eig_full)
-    test_gnm.covariance
-    assert test_gnm._covariance is not None
+    test_anm.covariance
+    assert test_anm._covariance is not None
     # read covariance
-    bfactor_cov_temp = test_gnm.bfactor(tem=300)
+    bfactor_cov_temp = test_anm.bfactor(tem=300)
     assert np.allclose(bfactor_eig_temp, bfactor_cov_temp)
 
 

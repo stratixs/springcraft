@@ -99,6 +99,8 @@ def mean_square_fluctuation(
     Compute the *mean square fluctuation* for the atoms according
     to the ENM.
 
+    Uses covariance diagonal if available and full set is considered.
+
     Parameters
     ----------
     enm : ENM
@@ -122,50 +124,35 @@ def mean_square_fluctuation(
     msqf : ndarray, shape=(n,), dtype=float
         The mean square fluctuations for each atom in the model.
     """
-    from springcraft.anm import ANM
-    from springcraft.gnm import GNM
+    from springcraft.enm import ENM
 
-    if not isinstance(enm, (GNM, ANM)):
-        raise ValueError("Instance of GNM/ANM class expected.")
+    if not isinstance(enm, ENM):
+        raise ValueError("Instance of ENM class expected.")
 
-    eig_values, eig_vectors = enm.eigen()
-
-    if isinstance(enm, ANM):
-        # Eigenvectors: 3N -> N
-        cols_n = np.arange(0, len(eig_vectors[0]), 3)
-        eig_vectors = np.add.reduceat(np.square(eig_vectors), cols_n, axis=1)
-        ntriv_modes = 6
-    # -> GNMs
+    if enm.has_covariance and mode_subset is None:
+        msqf = np.diag(enm.covariance).reshape((-1, enm.dof)).sum(axis=1)
     else:
-        eig_vectors = np.square(eig_vectors)
-        ntriv_modes = 1
+        eig_values, eig_vectors, n_triv = enm.eigen(n_zero=True)
 
-    # Choose modes included in computation; raise error, if trivial
-    # modes are included
-    if mode_subset is None:
-        mode_subset = np.arange(ntriv_modes, len(eig_values))
-    elif any(mode_subset <= (ntriv_modes - 1)):
-        raise ValueError(
-            "Trivial modes are included in the current selection."
-            " Please check your input."
-        )
+        # Choose modes included in computation; raise error, if trivial
+        # modes are included
+        if mode_subset is None:
+            mode_subset = slice(n_triv, len(eig_values))  # pyright: ignore[reportAssignmentType]
+        elif np.any(mode_subset < n_triv):
+            raise ValueError(
+                "Trivial modes are included in the current selection. "
+                "Please check your input."
+            )
 
-    eig_values = eig_values[mode_subset]
-    eig_vectors = eig_vectors[mode_subset]
-
-    # Adjust shape of eig_values (N,) -> (N, 1)
-    eig_values = eig_values.reshape(eig_values.shape[0], 1)
-    # Eigenvecs in distinct rows; divide by associated
-    # squared Eigenvalues
-    sq_div_eig_vectors = np.sum(eig_vectors / eig_values, axis=0)
+        msqf = (eig_vectors[mode_subset].T ** 2) @ (1 / eig_values[mode_subset])
+        msqf = msqf.reshape(-1, enm.dof).sum(axis=1)
 
     # Temperature weighting
     if tem is None:
         tem_scaling = 1
     else:
         tem_scaling = tem * tem_factors
-
-    msqf = sq_div_eig_vectors * tem_scaling
+    msqf = msqf * tem_scaling
 
     return msqf
 

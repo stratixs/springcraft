@@ -219,13 +219,12 @@ class ENM(ABC):
 
             self._eigen_values, self._eigen_vectors = np.linalg.eigh(self._interactions)
 
-            threshhold = 1e-9 * self._eigen_values[-1]  # max(eig_val) * 10^-9
-
+            threshold = self._eigen_values[-1] * 1e-6  # max(eigen_values) * 10^-6
             i = 0
-            while self._eigen_values[i] < -threshhold:
+            while self._eigen_values[i] < -threshold:
                 i = i + 1
             n_neg = i
-            while self._eigen_values[i] <= threshhold:
+            while self._eigen_values[i] <= threshold:
                 i = i + 1
             n_triv = i + n_neg
 
@@ -279,9 +278,8 @@ class ENM(ABC):
         """
         Compute the *mean square fluctuation* for the atoms according to
         the GNM.
-        This is equal to the sum of the diagonal of of the
-        GNM covariance matrix, if all k-1 non-trivial
-        modes are considered.
+        This is equal to the diagonal of the covariance matrix, if all
+        k-1 non-trivial modes are considered (subset=None, default).
 
         Parameters
         ----------
@@ -292,7 +290,7 @@ class ENM(ABC):
             The first mode is counted as 0 in accordance with
             Python conventions.
             If mode_subset is None, all modes except the first
-            trivial mode (0) are included.
+            trivial modes are included.
         tem : int, float, None, optional
             Temperature in Kelvin to compute the temperature scaling
             factor by multiplying with the Boltzmann constant.
@@ -331,7 +329,7 @@ class ENM(ABC):
             The first mode is counted as 0 in accordance with
             Python conventions.
             If mode_subset is None, all modes except the first
-            trivial mode (0) are included.
+            trivial modes are included.
         tem : int, float, None, optional
             Temperature in Kelvin to compute the temperature scaling
             factor by multiplying with the Boltzmann constant.

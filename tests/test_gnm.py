@@ -294,32 +294,31 @@ def test_mean_square_fluctuation():
     test_gnm = prepare_gnm(pdb_id, cutoff)
     test_gnm.kirchhoff
     assert test_gnm._covariance is None
+    # calc with eigvecs
     msqf_eig_full = test_gnm.mean_square_fluctuation()
     test_gnm.covariance
     assert test_gnm._covariance is not None
+    # read covariance
     msqf_cov_full = test_gnm.mean_square_fluctuation()
     assert np.allclose(msqf_eig_full, msqf_cov_full)
 
     # test small subset
-    subset = np.array([3, 17, 13])
     test_gnm = prepare_gnm(pdb_id, cutoff)
     test_gnm.kirchhoff
-    assert test_gnm._covariance is None
-    msqf_eig_subset = test_gnm.mean_square_fluctuation(mode_subset=subset)
-    assert np.allclose(msqf_eig_subset, msqf_eig_full[subset])
-    test_gnm.covariance
-    assert test_gnm._covariance is not None
-    msqf_cov_subset = test_gnm.mean_square_fluctuation(mode_subset=subset)
-    assert np.allclose(msqf_eig_subset, msqf_cov_subset)
+    with pytest.raises(ValueError, match="Trivial"):
+        test_gnm.mean_square_fluctuation(mode_subset=np.array([0, 13]))
+    test_gnm.mean_square_fluctuation(mode_subset=np.array([1, 19]))
 
     # test temp scaling
     test_gnm = prepare_gnm(pdb_id, cutoff)
     test_gnm.kirchhoff
     assert test_gnm._covariance is None
+    # calc with eigvecs
     msqf_eig_temp = test_gnm.mean_square_fluctuation(tem=300)
     assert np.allclose(msqf_eig_temp, 300 * 1.380649e-23 * msqf_eig_full)
     test_gnm.covariance
     assert test_gnm._covariance is not None
+    # read covariance
     msqf_cov_temp = test_gnm.mean_square_fluctuation(tem=300)
     assert np.allclose(msqf_eig_temp, msqf_cov_temp)
 
@@ -335,32 +334,31 @@ def test_bfactor():
     test_gnm = prepare_gnm(pdb_id, cutoff)
     test_gnm.kirchhoff
     assert test_gnm._covariance is None
+    # calc with eigvecs
     bfactor_eig_full = test_gnm.bfactor()
     test_gnm.covariance
     assert test_gnm._covariance is not None
+    # read covariance
     bfactor_cov_full = test_gnm.bfactor()
     assert np.allclose(bfactor_eig_full, bfactor_cov_full)
 
     # test small subset
-    subset = np.array([3, 17, 13])
     test_gnm = prepare_gnm(pdb_id, cutoff)
     test_gnm.kirchhoff
-    assert test_gnm._covariance is None
-    bfactor_eig_subset = test_gnm.bfactor(mode_subset=subset)
-    assert np.allclose(bfactor_eig_subset, bfactor_eig_full[subset])
-    test_gnm.covariance
-    assert test_gnm._covariance is not None
-    bfactor_cov_subset = test_gnm.bfactor(mode_subset=subset)
-    assert np.allclose(bfactor_eig_subset, bfactor_cov_subset)
+    with pytest.raises(ValueError, match="Trivial"):
+        test_gnm.bfactor(mode_subset=np.array([0, 13]))
+    test_gnm.bfactor(mode_subset=np.array([1, 19]))
 
     # test temp scaling
     test_gnm = prepare_gnm(pdb_id, cutoff)
     test_gnm.kirchhoff
     assert test_gnm._covariance is None
+    # calc with eigvecs
     bfactor_eig_temp = test_gnm.bfactor(tem=300)
     assert np.allclose(bfactor_eig_temp, 300 * 1.380649e-23 * bfactor_eig_full)
     test_gnm.covariance
     assert test_gnm._covariance is not None
+    # read covariance
     bfactor_cov_temp = test_gnm.bfactor(tem=300)
     assert np.allclose(bfactor_eig_temp, bfactor_cov_temp)
 
