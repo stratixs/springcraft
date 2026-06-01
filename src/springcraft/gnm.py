@@ -157,6 +157,41 @@ class GNM(ENMPert):
                 self._modify_covariance(atom_i, atom_j, None, delta[atom_j])
             self._modify_interactions(atom_i, atom_j, None, delta[atom_j])
 
+    @override
+    def prepare_one_rank_update(
+        self, atom_i: int, atom_j: int, delta: bool | int | float
+    ) -> tuple[slice, slice, np.ndarray, float]:
+        super().prepare_one_rank_update(atom_i, atom_j, delta)
+
+        if delta is False:
+            # turn off contact
+            delta = self._kirchhoff[atom_i, atom_j]
+        elif delta is True:
+            # turn on contact (reset to original value)
+            disp = self._coord[atom_j] - self._coord[atom_i]
+            sq_dist = disp @ disp
+            if (
+                self._ff.cutoff_distance is None
+                or sq_dist <= self._ff.cutoff_distance**2
+            ):
+                # TODO ff contact_pair_on
+                delta = self._kirchhoff[atom_i, atom_j]
+                delta += self._ff.force_constant(  # pyright: ignore[reportAssignmentType]
+                    np.atleast_1d(atom_i),
+                    np.atleast_1d(atom_j),
+                    np.atleast_1d(sq_dist),
+                )
+
+        if np.abs(delta) < 1e-10:
+            raise ValueError("No change in interaction strength.")
+
+        return (
+            slice(atom_i, atom_i + 1),
+            slice(atom_j, atom_j + 1),
+            np.atleast_1d(1),
+            delta,
+        )
+
     @overload
     def eigen(
         self, n_zero: Literal[False] = False, copy: bool = True
@@ -216,38 +251,3 @@ class GNM(ENMPert):
     @override
     def _on_covariance_set(self):
         self._kirchhoff = None
-
-    @override
-    def _prepare_one_rank_update(
-        self, atom_i: int, atom_j: int, delta: bool | int | float
-    ) -> tuple[slice, slice, np.ndarray, float]:
-        super()._prepare_one_rank_update(atom_i, atom_j, delta)
-
-        if delta is False:
-            # turn off contact
-            delta = self._kirchhoff[atom_i, atom_j]
-        elif delta is True:
-            # turn on contact (reset to original value)
-            disp = self._coord[atom_j] - self._coord[atom_i]
-            sq_dist = disp @ disp
-            if (
-                self._ff.cutoff_distance is None
-                or sq_dist <= self._ff.cutoff_distance**2
-            ):
-                # TODO ff contact_pair_on
-                delta = self._kirchhoff[atom_i, atom_j]
-                delta += self._ff.force_constant(  # pyright: ignore[reportAssignmentType]
-                    np.atleast_1d(atom_i),
-                    np.atleast_1d(atom_j),
-                    np.atleast_1d(sq_dist),
-                )
-
-        if np.abs(delta) < 1e-10:
-            raise ValueError("No change in interaction strength.")
-
-        return (
-            slice(atom_i, atom_i + 1),
-            slice(atom_j, atom_j + 1),
-            np.atleast_1d(1),
-            delta,
-        )

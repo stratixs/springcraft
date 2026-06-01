@@ -148,11 +148,8 @@ def mean_square_fluctuation(
         msqf = msqf.reshape(-1, enm.dof).sum(axis=1)
 
     # Temperature weighting
-    if tem is None:
-        tem_scaling = 1
-    else:
-        tem_scaling = tem * tem_factors
-    msqf = msqf * tem_scaling
+    if tem is not None:
+        msqf *= tem * tem_factors
 
     return msqf
 

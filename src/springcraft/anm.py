@@ -169,6 +169,42 @@ class ANM(ENMPert):
                 self._modify_covariance(slice_i, slice_j, slice_t[k], delta[atom_j])
             self._modify_interactions(slice_i, slice_j, slice_t[k], delta[atom_j])
 
+    @override
+    def prepare_one_rank_update(
+        self, atom_i: int, atom_j: int, delta: bool | int | float
+    ) -> tuple[slice, slice, np.ndarray, float]:
+        super().prepare_one_rank_update(atom_i, atom_j, delta)
+
+        disp = self._coord[atom_j] - self._coord[atom_i]
+        sq_dist = disp @ disp
+        comp = disp[0] ** 2 / sq_dist
+        if delta is False:
+            # turn off contact
+            delta = self._hessian[atom_i * self.dof, atom_j * self.dof] / comp
+        elif delta is True:
+            # turn on contact (reset to original value)
+            if (
+                self._ff.cutoff_distance is None
+                or sq_dist <= self._ff.cutoff_distance**2
+            ):
+                # TODO ff contact_pair_on
+                delta = self._hessian[atom_i * self.dof, atom_j * self.dof] / comp
+                delta += self._ff.force_constant(  # pyright: ignore[reportAssignmentType]
+                    np.atleast_1d(atom_i),
+                    np.atleast_1d(atom_j),
+                    np.atleast_1d(sq_dist),
+                )
+
+        if np.abs(delta) < 1e-6:
+            raise ValueError("No change in interaction strength.")
+
+        return (
+            slice(atom_i * self.dof, (atom_i + 1) * self.dof),
+            slice(atom_j * self.dof, (atom_j + 1) * self.dof),
+            disp / np.sqrt(sq_dist),
+            delta,
+        )
+
     @overload
     def eigen(
         self, n_zero: Literal[False] = False, copy: bool = True
@@ -373,39 +409,3 @@ class ANM(ENMPert):
     @override
     def _on_covariance_set(self):
         self._hessian = None
-
-    @override
-    def _prepare_one_rank_update(
-        self, atom_i: int, atom_j: int, delta: bool | int | float
-    ) -> tuple[slice, slice, np.ndarray, float]:
-        super()._prepare_one_rank_update(atom_i, atom_j, delta)
-
-        disp = self._coord[atom_j] - self._coord[atom_i]
-        sq_dist = disp @ disp
-        comp = disp[0] ** 2 / sq_dist
-        if delta is False:
-            # turn off contact
-            delta = self._hessian[atom_i * self.dof, atom_j * self.dof] / comp
-        elif delta is True:
-            # turn on contact (reset to original value)
-            if (
-                self._ff.cutoff_distance is None
-                or sq_dist <= self._ff.cutoff_distance**2
-            ):
-                # TODO ff contact_pair_on
-                delta = self._hessian[atom_i * self.dof, atom_j * self.dof] / comp
-                delta += self._ff.force_constant(  # pyright: ignore[reportAssignmentType]
-                    np.atleast_1d(atom_i),
-                    np.atleast_1d(atom_j),
-                    np.atleast_1d(sq_dist),
-                )
-
-        if np.abs(delta) < 1e-6:
-            raise ValueError("No change in interaction strength.")
-
-        return (
-            slice(atom_i * self.dof, (atom_i + 1) * self.dof),
-            slice(atom_j * self.dof, (atom_j + 1) * self.dof),
-            disp / np.sqrt(sq_dist),
-            delta,
-        )
