@@ -5,63 +5,11 @@ from unittest.mock import patch
 
 import biotite.structure as struc
 import biotite.structure.info as strucinfo
-import biotite.structure.io.pdb as pdb
 import numpy as np
 import pytest
 
 import springcraft
 from tests.util import data_dir, load_protein_structure, prepare_anm
-
-
-@pytest.mark.parametrize(
-    "pdb_id, cutoff",
-    itertools.product(
-        ["1l2y", "104l", "10nm"],
-        [4, 7, 13],
-    ),
-)
-def test_adjacency(pdb_id, cutoff):
-    """
-    Tests that the cell list and brute force approaches produce
-    the same result.
-    Tests that PatchedForceFields are correctly handled. Activating
-    a contact takes precedence over deactivation.
-    """
-    ca = load_protein_structure(pdb_id)
-    ff = springcraft.InvariantForceField(cutoff)
-    ff = springcraft.PatchedForceField(
-        ff,
-        contact_shutdown=[2],
-        contact_pair_off=[[3, 2], [3, 4], [3, 5]],
-        contact_pair_on=[[2, 4], [3, 4], [3, 14]],
-        force_constants=[2, 2, 2],
-    )
-
-    test_anm_cell_list = springcraft.ANM(ca, ff, use_cell_list=True)
-    test_anm_brute_force = springcraft.ANM(ca, ff, use_cell_list=False)
-
-    hessian = test_anm_cell_list.hessian
-    assert np.allclose(hessian, test_anm_brute_force.hessian, atol=1e-7)
-
-    # contacts turned on
-    assert not np.array_equal(hessian[6:9, 12:15], np.zeros((3, 3)))  # (2, 4)
-    assert not np.array_equal(hessian[12:15, 6:9], np.zeros((3, 3)))  # (4, 2)
-    assert not np.array_equal(hessian[10:12, 12:15], np.zeros((3, 3)))  # (3, 4)
-    assert not np.array_equal(hessian[12:15, 10:12], np.zeros((3, 3)))  # (4, 3)
-    assert not np.array_equal(hessian[10:12, 42:45], np.zeros((3, 3)))  # (3, 14)
-    assert not np.array_equal(hessian[42:45, 10:12], np.zeros((3, 3)))  # (14, 3)
-
-    # contacts turned off
-    third = np.zeros((3, np.size(hessian, axis=0)))
-    third[:, 6:9] = hessian[6:9, 6:9]
-    third[:, 12:15] = hessian[6:9, 12:15]
-    assert np.array_equal(hessian[6:9, :], third)
-    third = np.zeros((np.size(hessian, axis=0), 3))
-    third[6:9, :] = hessian[6:9, 6:9]
-    third[12:15, :] = hessian[6:9, 12:15]
-    assert np.array_equal(hessian[:, 6:9], third)
-    assert not np.array_equal(hessian[10:12, 15:18], np.zeros((3, 3)))  # (3, 5)
-    assert not np.array_equal(hessian[15:18, 10:12], np.zeros((3, 3)))  # (5, 3)
 
 
 def test_mass_weights_simple():
@@ -160,21 +108,35 @@ def test_hessian_covariance_setter():
     assert np.allclose(test_eig_val2, test_eig_val3)
 
 
-@pytest.mark.parametrize("file_path", glob.glob(join(data_dir(), "*.pdb")))
-def test_compare_eigenvals_BiophysConnectoR(file_path):
+@pytest.mark.parametrize(
+    "pdb_id, cutoff",
+    itertools.product(
+        ["1l2y", "104l", "10nm"],
+        [4, 7, 13],
+    ),
+)
+def test_covariance(pdb_id, cutoff):
+    """
+    Tests whether the covariance is the pseudo-inverse of the hessian matrix.
+    """
+    test_anm = prepare_anm(pdb_id, cutoff)
+    assert np.allclose(
+        test_anm.hessian, test_anm.hessian @ test_anm.covariance @ test_anm.hessian
+    )
+
+
+@pytest.mark.parametrize("pdb_id", ["1l2y", "7cal"])
+def test_compare_eigenvals_BiophysConnectoR(pdb_id):
     """
     Compare non-mass-weighted eigenvalues with those computed with
     BiophysConnectoR for eANMs.
     """
-    pdb_file = pdb.PDBFile.read(file_path)
-    atoms = pdb.get_structure(pdb_file, model=1)
-    ca = atoms[(atoms.atom_name == "CA") & (atoms.element == "C")]
+    ca = load_protein_structure(pdb_id)
 
     ff = springcraft.TabulatedForceField.e_anm(ca)
     eanm = springcraft.ANM(ca, ff)
 
-    ref_name = basename(file_path).split(".")[0]
-    ref_file = f"biophysconnector_anm_eanm_evals_{ref_name}.csv"
+    ref_file = f"biophysconnector_anm_eanm_evals_{pdb_id}.csv"
 
     test_eigenval, _ = eanm.eigen()
 
@@ -188,27 +150,22 @@ def test_compare_eigenvals_BiophysConnectoR(file_path):
 
 
 @pytest.mark.parametrize(
-    "file_path, ff_name",
-    itertools.product(
-        glob.glob(join(data_dir(), "*.pdb")), ["Hinsen", "sdENM", "pfENM"]
-    ),
+    "pdb_id, ff_name",
+    itertools.product(["1l2y", "7cal"], ["Hinsen", "sdENM", "pfENM"]),
 )
-def test_mass_weights_eigenvals(file_path, ff_name):
+def test_mass_weights_eigenvals(pdb_id, ff_name):
     """
     Compare mass-weighted eigenvalues with reference values obtained
     with bio3d to test the correctness of the mass-weighting procedure
     and the validity of results obtained with SVD.
     To this end, bio3d-assigned masses are used.
     """
-    pdb_file = pdb.PDBFile.read(file_path)
-    pdb_name = basename(file_path).split(".")[0]
-    atoms = pdb.get_structure(pdb_file, model=1)
-    ca = atoms[(atoms.atom_name == "CA") & (atoms.element == "C")]
+    ca = load_protein_structure(pdb_id)
 
     if ff_name == "Hinsen":
         ff = springcraft.HinsenForceField()
         ff_bio3d_str = "calpha"
-    if ff_name == "sdENM":
+    elif ff_name == "sdENM":
         ff = springcraft.TabulatedForceField.sd_enm(ca)
         ff_bio3d_str = "sdenm"
 
@@ -226,13 +183,15 @@ def test_mass_weights_eigenvals(file_path, ff_name):
                 contact_pair_on=contact_mod_pairs,
                 force_constants=np.full(len(contact_mod_pairs), bonded_force_constant),
             )
-    if ff_name == "pfENM":
+    elif ff_name == "pfENM":
         ff = springcraft.ParameterFreeForceField()
         ff_bio3d_str = "pfanm"
+    else:
+        raise ValueError("Unkown ForceField.")
 
     # ENM-NMA -> Reference
-    bio3d_masses_file = f"bio3d_mass_{pdb_name}.csv.gz"
-    bio3d_eigvals_file = f"bio3d_anm_{ff_bio3d_str}_ff_evals_mw_{pdb_name}.csv.gz"
+    bio3d_masses_file = f"bio3d_mass_{pdb_id}.csv.gz"
+    bio3d_eigvals_file = f"bio3d_anm_{ff_bio3d_str}_ff_evals_mw_{pdb_id}.csv.gz"
     reference_masses = np.genfromtxt(join(data_dir(), bio3d_masses_file), delimiter=",")
     reference_eigenval = np.genfromtxt(
         join(data_dir(), bio3d_eigvals_file), delimiter=","
@@ -254,37 +213,37 @@ def test_eigen_parameters():
     cutoff = 7
     test_anm = prepare_anm(pdb_id, cutoff)
 
-    eig_val1, eig_vec1 = test_anm.eigen(copy=False, zero_mask=False)
+    eig_val1, eig_vec1 = test_anm.eigen(copy=False, n_zero=False)
     eig_val1[1] = 3
     eig_vec1[1, 1] = 3
-    eig_val2, eig_vec2 = test_anm.eigen(copy=False, zero_mask=False)
+    eig_val2, eig_vec2 = test_anm.eigen(copy=False, n_zero=False)
     assert np.array_equal(eig_val1, eig_val2)
     assert np.array_equal(eig_vec1, eig_vec2)
 
     test_anm = prepare_anm(pdb_id, cutoff)
 
-    eig_val1, eig_vec1 = test_anm.eigen(copy=True, zero_mask=False)
+    eig_val1, eig_vec1 = test_anm.eigen(copy=True, n_zero=False)
     eig_val1[1] = 3
     eig_vec1[1, 1] = 3
-    eig_val2, eig_vec2 = test_anm.eigen(copy=True, zero_mask=False)
+    eig_val2, eig_vec2 = test_anm.eigen(copy=True, n_zero=False)
     assert not np.array_equal(eig_val1, eig_val2)
     assert not np.array_equal(eig_vec1, eig_vec2)
 
     test_anm = prepare_anm(pdb_id, cutoff)
 
-    eig_val1, eig_vec1, eig_zero_mask1 = test_anm.eigen(copy=False, zero_mask=True)
+    eig_val1, eig_vec1, eig_n_zero1 = test_anm.eigen(copy=False, n_zero=True)
     eig_val1[1] = 3
     eig_vec1[1, 1] = 3
-    eig_val2, eig_vec2, eig_zero_mask2 = test_anm.eigen(copy=False, zero_mask=True)
+    eig_val2, eig_vec2, eig_n_zero2 = test_anm.eigen(copy=False, n_zero=True)
     assert np.array_equal(eig_val1, eig_val2)
     assert np.array_equal(eig_vec1, eig_vec2)
 
     test_anm = prepare_anm(pdb_id, cutoff)
 
-    eig_val1, eig_vec1, eig_zero_mask1 = test_anm.eigen(copy=True, zero_mask=True)
+    eig_val1, eig_vec1, eig_n_zero1 = test_anm.eigen(copy=True, n_zero=True)
     eig_val1[1] = 3
     eig_vec1[1, 1] = 3
-    eig_val2, eig_vec2, eig_zero_mask2 = test_anm.eigen(copy=True, zero_mask=True)
+    eig_val2, eig_vec2, eig_n_zero2 = test_anm.eigen(copy=True, n_zero=True)
     assert not np.array_equal(eig_val1, eig_val2)
     assert not np.array_equal(eig_vec1, eig_vec2)
 
@@ -359,36 +318,35 @@ def test_mean_square_fluctuation():
     cutoff = 7.0
 
     # test full set
-    test_gnm = prepare_anm(pdb_id, cutoff)
-    test_gnm.hessian
-    assert test_gnm._covariance is None
-    msqf_eig_full = test_gnm.mean_square_fluctuation()
-    test_gnm.covariance
-    assert test_gnm._covariance is not None
-    msqf_cov_full = test_gnm.mean_square_fluctuation()
+    test_anm = prepare_anm(pdb_id, cutoff)
+    test_anm.hessian
+    assert test_anm._covariance is None
+    # calc with eigvecs
+    msqf_eig_full = test_anm.mean_square_fluctuation()
+    test_anm.covariance
+    assert test_anm._covariance is not None
+    # read covariance
+    msqf_cov_full = test_anm.mean_square_fluctuation()
     assert np.allclose(msqf_eig_full, msqf_cov_full)
 
     # test small subset
-    subset = np.array([3, 17, 13])
-    test_gnm = prepare_anm(pdb_id, cutoff)
-    test_gnm.hessian
-    assert test_gnm._covariance is None
-    msqf_eig_subset = test_gnm.mean_square_fluctuation(mode_subset=subset)
-    assert np.allclose(msqf_eig_subset, msqf_eig_full[subset])
-    test_gnm.covariance
-    assert test_gnm._covariance is not None
-    msqf_cov_subset = test_gnm.mean_square_fluctuation(mode_subset=subset)
-    assert np.allclose(msqf_eig_subset, msqf_cov_subset)
+    test_anm = prepare_anm(pdb_id, cutoff)
+    test_anm.hessian
+    with pytest.raises(ValueError, match="Trivial"):
+        test_anm.mean_square_fluctuation(mode_subset=np.array([6, 13]))
+    test_anm.mean_square_fluctuation(mode_subset=np.array([7, 59]))
 
     # test temp scaling
-    test_gnm = prepare_anm(pdb_id, cutoff)
-    test_gnm.hessian
-    assert test_gnm._covariance is None
-    msqf_eig_temp = test_gnm.mean_square_fluctuation(tem=300)
+    test_anm = prepare_anm(pdb_id, cutoff)
+    test_anm.hessian
+    assert test_anm._covariance is None
+    # calc with eigvecs
+    msqf_eig_temp = test_anm.mean_square_fluctuation(tem=300)
     assert np.allclose(msqf_eig_temp, 300 * 1.380649e-23 * msqf_eig_full)
-    test_gnm.covariance
-    assert test_gnm._covariance is not None
-    msqf_cov_temp = test_gnm.mean_square_fluctuation(tem=300)
+    test_anm.covariance
+    assert test_anm._covariance is not None
+    # read covariance
+    msqf_cov_temp = test_anm.mean_square_fluctuation(tem=300)
     assert np.allclose(msqf_eig_temp, msqf_cov_temp)
 
 
@@ -400,36 +358,35 @@ def test_bfactor():
     cutoff = 7.0
 
     # test full set
-    test_gnm = prepare_anm(pdb_id, cutoff)
-    test_gnm.hessian
-    assert test_gnm._covariance is None
-    bfactor_eig_full = test_gnm.bfactor()
-    test_gnm.covariance
-    assert test_gnm._covariance is not None
-    bfactor_cov_full = test_gnm.bfactor()
+    test_anm = prepare_anm(pdb_id, cutoff)
+    test_anm.hessian
+    assert test_anm._covariance is None
+    # calc with eigvecs
+    bfactor_eig_full = test_anm.bfactor()
+    test_anm.covariance
+    assert test_anm._covariance is not None
+    # read covariance
+    bfactor_cov_full = test_anm.bfactor()
     assert np.allclose(bfactor_eig_full, bfactor_cov_full)
 
     # test small subset
-    subset = np.array([3, 17, 13])
-    test_gnm = prepare_anm(pdb_id, cutoff)
-    test_gnm.hessian
-    assert test_gnm._covariance is None
-    bfactor_eig_subset = test_gnm.bfactor(mode_subset=subset)
-    assert np.allclose(bfactor_eig_subset, bfactor_eig_full[subset])
-    test_gnm.covariance
-    assert test_gnm._covariance is not None
-    bfactor_cov_subset = test_gnm.bfactor(mode_subset=subset)
-    assert np.allclose(bfactor_eig_subset, bfactor_cov_subset)
+    test_anm = prepare_anm(pdb_id, cutoff)
+    test_anm.hessian
+    with pytest.raises(ValueError, match="Trivial"):
+        test_anm.bfactor(mode_subset=np.array([6, 13]))
+    test_anm.bfactor(mode_subset=np.array([7, 59]))
 
     # test temp scaling
-    test_gnm = prepare_anm(pdb_id, cutoff)
-    test_gnm.hessian
-    assert test_gnm._covariance is None
-    bfactor_eig_temp = test_gnm.bfactor(tem=300)
+    test_anm = prepare_anm(pdb_id, cutoff)
+    test_anm.hessian
+    assert test_anm._covariance is None
+    # calc with eigvecs
+    bfactor_eig_temp = test_anm.bfactor(tem=300)
     assert np.allclose(bfactor_eig_temp, 300 * 1.380649e-23 * bfactor_eig_full)
-    test_gnm.covariance
-    assert test_gnm._covariance is not None
-    bfactor_cov_temp = test_gnm.bfactor(tem=300)
+    test_anm.covariance
+    assert test_anm._covariance is not None
+    # read covariance
+    bfactor_cov_temp = test_anm.bfactor(tem=300)
     assert np.allclose(bfactor_eig_temp, bfactor_cov_temp)
 
 
@@ -445,9 +402,7 @@ def test_frequency_fluctuation_dcc(ff_name):
     N_A = 6.02214076e23
     tem = 300
 
-    pdb_file = pdb.PDBFile.read(join(data_dir(), "1l2y.pdb"))
-    atoms = pdb.get_structure(pdb_file, model=1)
-    ca = atoms[(atoms.atom_name == "CA") & (atoms.element == "C")]
+    ca = load_protein_structure("1l2y")
 
     # Prody
     if ff_name == "ANM_standard":

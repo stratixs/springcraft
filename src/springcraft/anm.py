@@ -14,6 +14,7 @@ from typing_extensions import Literal, Union, overload, override
 from springcraft import nma
 from springcraft.enm_pert import ENMPert
 from springcraft.forcefield import ForceField
+from springcraft.interaction import compute_hessian
 
 
 class ANM(ENMPert):
@@ -85,25 +86,9 @@ class ANM(ENMPert):
     def hessian(self) -> np.ndarray:
         if self._hessian is None:
             if self._covariance is None:
-                atom_i, atom_j, disp, sq_dist = self._calc_adjacency()
-                force_constants = self._ff.force_constant(atom_i, atom_j, sq_dist)
-
-                self._hessian = np.zeros((self._natoms, self._natoms, 3, 3))
-                self._hessian[atom_i, atom_j] = (
-                    -force_constants[:, np.newaxis, np.newaxis]
-                    / sq_dist[:, np.newaxis, np.newaxis]
-                    * disp[:, :, np.newaxis]
-                    * disp[:, np.newaxis, :]
+                self._hessian, _ = compute_hessian(
+                    self._coord, self._ff, self._use_cell_list
                 )
-                # Set values for main diagonal
-                indices = np.arange(self._natoms)
-                self._hessian[indices, indices] = -np.sum(self._hessian, axis=0)
-
-                # Reshape to (20*3, 20*3) matrix
-                self._hessian = np.transpose(self._hessian, (0, 2, 1, 3)).reshape(
-                    self._natoms * 3, self._natoms * 3
-                )
-
                 if self._mass_weight_matrix is not None:
                     self._hessian *= self._mass_weight_matrix
             else:
@@ -114,10 +99,10 @@ class ANM(ENMPert):
 
     @hessian.setter
     def hessian(self, value: np.ndarray):
-        if value.shape != (self._natoms * 3, self._natoms * 3):
+        if value.shape != (self._natoms * self.dof, self._natoms * self.dof):
             raise IndexError(
                 f"Expected shape "
-                f"{(self._natoms * 3, self._natoms * 3)}, "
+                f"{(self._natoms * self.dof, self._natoms * self.dof)}, "
                 f"got {value.shape}"
             )
         self._hessian = value
@@ -186,19 +171,17 @@ class ANM(ENMPert):
 
     @overload
     def eigen(
-        self, zero_mask: Literal[False] = False, copy: bool = True
+        self, n_zero: Literal[False] = False, copy: bool = True
     ) -> tuple[np.ndarray, np.ndarray]: ...
 
     @overload
     def eigen(
-        self, zero_mask: Literal[True], copy: bool = True
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]: ...
+        self, n_zero: Literal[True], copy: bool = True
+    ) -> tuple[np.ndarray, np.ndarray, int]: ...
 
     def eigen(
-        self, zero_mask=False, copy=True
-    ) -> Union[
-        tuple[np.ndarray, np.ndarray], tuple[np.ndarray, np.ndarray, np.ndarray]
-    ]:
+        self, n_zero=False, copy=True
+    ) -> Union[tuple[np.ndarray, np.ndarray], tuple[np.ndarray, np.ndarray, int]]:
         """
         Compute or fetch the Eigenvalues and Eigenvectors of the
         *Hessian* matrix.
@@ -209,8 +192,9 @@ class ANM(ENMPert):
 
         Parameters
         ----------
-        zero_mask : bool, optional, default=False
-            Whether to return a mask of non-zero eigenvalues.
+        n_zero : bool, optional, default=False
+            Whether to return number of zero eigenvalues.
+            These are the first eigenvalues.
         copy : bool, optional, default=True
             Whether to return the eigenvalues and eigenvectors as copies.
             If you choose not to return copies a modification to these
@@ -218,17 +202,17 @@ class ANM(ENMPert):
 
         Returns
         -------
-        eig_values : ndarray, shape=(k,), dtype=float
+        eigen_values : ndarray, shape=(k,), dtype=float
             Eigenvalues of the *Hessian* matrix in ascending order.
-        eig_vectors : ndarray, shape=(k,n), dtype=float
+        eigen_vectors : ndarray, shape=(k,n), dtype=float
             Eigenvectors of the *Hessian* matrix.
             ``eig_values[i]`` corresponds to ``eig_vectors[i]``.
-        zero_mask : ndarray, shape(k,), dtype=bool, optional
-            The mask of non zero eigenvalues.
-            Only returned if ``zero_mask`` is set.
+        eigen_n_zero : int, optional
+            The number of the (first) zero eigenvalues.
+            Only returned if ``n_zero`` is set.
         """
-        self.hessian
-        return super().eigen(zero_mask, copy)
+        self.hessian  # calc hessian if non-existant
+        return super().eigen(n_zero, copy)
 
     def normal_mode(
         self,

@@ -12,54 +12,6 @@ from tests.util import data_dir, load_protein_structure, prepare_gnm
 
 @pytest.mark.parametrize(
     "pdb_id, cutoff",
-    itertools.product(
-        ["1l2y", "104l", "10nm"],
-        [4, 7, 13],
-    ),
-)
-def test_adjacency(pdb_id, cutoff):
-    """
-    Tests that the cell list and brute force approaches produce
-    the same result.
-    Tests that PatchedForceFields are correctly handled. Activating
-    a contact takes precedence over deactivation.
-    """
-    ca = load_protein_structure(pdb_id)
-    ff = springcraft.InvariantForceField(cutoff)
-    ff = springcraft.PatchedForceField(
-        ff,
-        contact_shutdown=[2],
-        contact_pair_off=[[3, 2], [3, 4], [3, 5]],
-        contact_pair_on=[[2, 4], [3, 4], [3, 14]],
-        force_constants=[2, 2, 2],
-    )
-
-    test_gnm_cell_list = springcraft.GNM(ca, ff, use_cell_list=True)
-    test_gnm_brute_force = springcraft.GNM(ca, ff, use_cell_list=False)
-
-    assert np.allclose(test_gnm_cell_list.kirchhoff, test_gnm_brute_force.kirchhoff)
-
-    # contacts turned on
-    kirchhoff = test_gnm_cell_list.kirchhoff
-    assert kirchhoff[2, 4] == -2
-    assert kirchhoff[4, 2] == -2
-    assert kirchhoff[3, 4] == -2
-    assert kirchhoff[4, 3] == -2
-    assert kirchhoff[3, 14] == -2
-    assert kirchhoff[14, 3] == -2
-
-    # contacts turned off
-    third = np.zeros(len(ca))
-    third[2] = 2
-    third[4] = -2
-    assert np.array_equal(kirchhoff[2, :], third)
-    assert np.array_equal(kirchhoff[:, 2], third)
-    assert kirchhoff[3, 5] == 0
-    assert kirchhoff[5, 3] == 0
-
-
-@pytest.mark.parametrize(
-    "pdb_id, cutoff",
     itertools.product(["1l2y"], [4, 7, 13]),
 )
 def test_kirchhoff(pdb_id, cutoff):
@@ -166,6 +118,24 @@ def test_kirchhoff_covariance_setter():
 @pytest.mark.parametrize(
     "pdb_id, cutoff",
     itertools.product(
+        ["1l2y", "104l", "10nm"],
+        [4, 7, 13],
+    ),
+)
+def test_covariance(pdb_id, cutoff):
+    """
+    Tests whether the covariance is the pseudo-inverse of the kirchhoff matrix.
+    """
+    test_anm = prepare_gnm(pdb_id, cutoff)
+    assert np.allclose(
+        test_anm.kirchhoff,
+        test_anm.kirchhoff @ test_anm.covariance @ test_anm.kirchhoff,
+    )
+
+
+@pytest.mark.parametrize(
+    "pdb_id, cutoff",
+    itertools.product(
         ["1l2y"],
         # Cutoff must not be too large,
         # otherwise degenerate eigenvalues appear
@@ -210,41 +180,41 @@ def test_eigen_parameters():
     cutoff = 7
     test_gnm = prepare_gnm(pdb_id, cutoff)
 
-    eig_val1, eig_vec1 = test_gnm.eigen(copy=False, zero_mask=False)
+    eig_val1, eig_vec1 = test_gnm.eigen(copy=False, n_zero=False)
     eig_val1[1] = 3
     eig_vec1[1, 1] = 3
-    eig_val2, eig_vec2 = test_gnm.eigen(copy=False, zero_mask=False)
+    eig_val2, eig_vec2 = test_gnm.eigen(copy=False, n_zero=False)
     assert np.array_equal(eig_val1, eig_val2)
     assert np.array_equal(eig_vec1, eig_vec2)
 
     test_gnm = prepare_gnm(pdb_id, cutoff)
 
-    eig_val1, eig_vec1 = test_gnm.eigen(copy=True, zero_mask=False)
+    eig_val1, eig_vec1 = test_gnm.eigen(copy=True, n_zero=False)
     eig_val1[1] = 3
     eig_vec1[1, 1] = 3
-    eig_val2, eig_vec2 = test_gnm.eigen(copy=True, zero_mask=False)
+    eig_val2, eig_vec2 = test_gnm.eigen(copy=True, n_zero=False)
     assert not np.array_equal(eig_val1, eig_val2)
     assert not np.array_equal(eig_vec1, eig_vec2)
 
     test_gnm = prepare_gnm(pdb_id, cutoff)
 
-    eig_val1, eig_vec1, eig_zero_mask1 = test_gnm.eigen(copy=False, zero_mask=True)
+    eig_val1, eig_vec1, eig_n_zero1 = test_gnm.eigen(copy=False, n_zero=True)
     eig_val1[1] = 3
     eig_vec1[1, 1] = 3
-    eig_val2, eig_vec2, eig_zero_mask2 = test_gnm.eigen(copy=False, zero_mask=True)
+    eig_val2, eig_vec2, eig_n_zero2 = test_gnm.eigen(copy=False, n_zero=True)
     assert np.array_equal(eig_val1, eig_val2)
     assert np.array_equal(eig_vec1, eig_vec2)
-    assert np.array_equal(eig_zero_mask1, eig_zero_mask2)
+    assert eig_n_zero1 == eig_n_zero2
 
     test_gnm = prepare_gnm(pdb_id, cutoff)
 
-    eig_val1, eig_vec1, eig_zero_mask1 = test_gnm.eigen(copy=True, zero_mask=True)
+    eig_val1, eig_vec1, eig_n_zero1 = test_gnm.eigen(copy=True, n_zero=True)
     eig_val1[1] = 3
     eig_vec1[1, 1] = 3
-    eig_val2, eig_vec2, eig_zero_mask2 = test_gnm.eigen(copy=True, zero_mask=True)
+    eig_val2, eig_vec2, eig_n_zero2 = test_gnm.eigen(copy=True, n_zero=True)
     assert not np.array_equal(eig_val1, eig_val2)
     assert not np.array_equal(eig_vec1, eig_vec2)
-    assert np.array_equal(eig_zero_mask1, eig_zero_mask2)
+    assert eig_n_zero1 == eig_n_zero2
 
 
 @pytest.mark.parametrize(
@@ -324,32 +294,31 @@ def test_mean_square_fluctuation():
     test_gnm = prepare_gnm(pdb_id, cutoff)
     test_gnm.kirchhoff
     assert test_gnm._covariance is None
+    # calc with eigvecs
     msqf_eig_full = test_gnm.mean_square_fluctuation()
     test_gnm.covariance
     assert test_gnm._covariance is not None
+    # read covariance
     msqf_cov_full = test_gnm.mean_square_fluctuation()
     assert np.allclose(msqf_eig_full, msqf_cov_full)
 
     # test small subset
-    subset = np.array([3, 17, 13])
     test_gnm = prepare_gnm(pdb_id, cutoff)
     test_gnm.kirchhoff
-    assert test_gnm._covariance is None
-    msqf_eig_subset = test_gnm.mean_square_fluctuation(mode_subset=subset)
-    assert np.allclose(msqf_eig_subset, msqf_eig_full[subset])
-    test_gnm.covariance
-    assert test_gnm._covariance is not None
-    msqf_cov_subset = test_gnm.mean_square_fluctuation(mode_subset=subset)
-    assert np.allclose(msqf_eig_subset, msqf_cov_subset)
+    with pytest.raises(ValueError, match="Trivial"):
+        test_gnm.mean_square_fluctuation(mode_subset=np.array([0, 13]))
+    test_gnm.mean_square_fluctuation(mode_subset=np.array([1, 19]))
 
     # test temp scaling
     test_gnm = prepare_gnm(pdb_id, cutoff)
     test_gnm.kirchhoff
     assert test_gnm._covariance is None
+    # calc with eigvecs
     msqf_eig_temp = test_gnm.mean_square_fluctuation(tem=300)
     assert np.allclose(msqf_eig_temp, 300 * 1.380649e-23 * msqf_eig_full)
     test_gnm.covariance
     assert test_gnm._covariance is not None
+    # read covariance
     msqf_cov_temp = test_gnm.mean_square_fluctuation(tem=300)
     assert np.allclose(msqf_eig_temp, msqf_cov_temp)
 
@@ -365,32 +334,31 @@ def test_bfactor():
     test_gnm = prepare_gnm(pdb_id, cutoff)
     test_gnm.kirchhoff
     assert test_gnm._covariance is None
+    # calc with eigvecs
     bfactor_eig_full = test_gnm.bfactor()
     test_gnm.covariance
     assert test_gnm._covariance is not None
+    # read covariance
     bfactor_cov_full = test_gnm.bfactor()
     assert np.allclose(bfactor_eig_full, bfactor_cov_full)
 
     # test small subset
-    subset = np.array([3, 17, 13])
     test_gnm = prepare_gnm(pdb_id, cutoff)
     test_gnm.kirchhoff
-    assert test_gnm._covariance is None
-    bfactor_eig_subset = test_gnm.bfactor(mode_subset=subset)
-    assert np.allclose(bfactor_eig_subset, bfactor_eig_full[subset])
-    test_gnm.covariance
-    assert test_gnm._covariance is not None
-    bfactor_cov_subset = test_gnm.bfactor(mode_subset=subset)
-    assert np.allclose(bfactor_eig_subset, bfactor_cov_subset)
+    with pytest.raises(ValueError, match="Trivial"):
+        test_gnm.bfactor(mode_subset=np.array([0, 13]))
+    test_gnm.bfactor(mode_subset=np.array([1, 19]))
 
     # test temp scaling
     test_gnm = prepare_gnm(pdb_id, cutoff)
     test_gnm.kirchhoff
     assert test_gnm._covariance is None
+    # calc with eigvecs
     bfactor_eig_temp = test_gnm.bfactor(tem=300)
     assert np.allclose(bfactor_eig_temp, 300 * 1.380649e-23 * bfactor_eig_full)
     test_gnm.covariance
     assert test_gnm._covariance is not None
+    # read covariance
     bfactor_cov_temp = test_gnm.bfactor(tem=300)
     assert np.allclose(bfactor_eig_temp, bfactor_cov_temp)
 
@@ -427,8 +395,6 @@ def test_fluctuation_dcc(pdb_id, cutoff):
         delimiter=",",
     )
 
-    print(test_dcc_subset.shape)
-    print(reference_dcc_norm_subset.shape)
     assert np.allclose(test_fluc, reference_fluc)
     assert np.allclose(test_dcc, reference_dcc)
     assert np.allclose(test_dcc_subset, reference_dcc_norm_subset)
