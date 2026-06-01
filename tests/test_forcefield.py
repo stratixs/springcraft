@@ -2,13 +2,11 @@ from os.path import join
 
 import biotite.sequence as seq
 import biotite.structure as struc
-import biotite.structure.io.pdb as pdb
 import numpy as np
 import pytest
 
 import springcraft
-
-from .util import data_dir
+from tests.util import data_dir, load_protein_structure
 
 
 @pytest.fixture
@@ -16,9 +14,7 @@ def atoms():
     """
     Create a simple protein structure with two chains.
     """
-    pdb_file = pdb.PDBFile.read(join(data_dir(), "1l2y.pdb"))
-    atoms = pdb.get_structure(pdb_file, model=1)
-    ca = atoms[(atoms.atom_name == "CA") & (atoms.element == "C")]
+    ca = load_protein_structure("1l2y")
 
     ca_new_chain = ca.copy()
     # Ensure different chain IDs for both chains

@@ -400,7 +400,7 @@ class ANM(ENMPert):
                     np.atleast_1d(sq_dist),
                 )
 
-        if np.abs(delta) < 1e-10:
+        if np.abs(delta) < 1e-6:
             raise ValueError("No change in interaction strength.")
 
         return (

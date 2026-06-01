@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 import springcraft
-from tests.util import data_dir, load_protein_structure, prepare_gnm
+from tests.util import ModifiedForceField, data_dir, load_protein_structure, prepare_gnm
 
 
 @pytest.mark.parametrize(

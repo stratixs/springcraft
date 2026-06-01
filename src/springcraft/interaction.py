@@ -171,16 +171,11 @@ def _prepare_values_for_interaction_matrix(
         # Include all possible interactions, except an atom with itself
         adj_matrix = np.ones((len(coord), len(coord)), dtype=bool)
     elif use_cell_list:
-        cell_list = struc.CellList(  # pyright: ignore[reportAttributeAccessIssue]
-            coord,
-            cutoff_distance,
-        )
+        cell_list = struc.CellList(coord, cutoff_distance)
         adj_matrix = cell_list.create_adjacency_matrix(cutoff_distance)
     else:
         # Brute force: Calculate all pairwise squared distances
-        disp_matrix = struc.displacement(
-            coord[np.newaxis, :, :], coord[:, np.newaxis, :]
-        )
+        disp_matrix = coord[:, np.newaxis, :] - coord[np.newaxis, :, :]
         sq_dist_matrix = np.sum(disp_matrix * disp_matrix, axis=-1)
         adj_matrix = sq_dist_matrix <= cutoff_distance**2
     # Remove interactions of atoms with themselves
@@ -194,19 +189,17 @@ def _prepare_values_for_interaction_matrix(
 
     # Convert matrix to indices where interaction exists
     atom_i, atom_j = np.where(adj_matrix)
-    pairs = np.array((atom_i, atom_j)).T
-
     # Get displacement vector for ANMs
     # and squared distances for distance-dependent force fields
     if cutoff_distance is None or use_cell_list:
-        disp = struc.index_displacement(coord, pairs)
+        disp = coord[atom_j] - coord[atom_i]
         sq_dist = np.sum(disp * disp, axis=-1)
     else:
         # Displacements and squared distances were already calculated
-        disp = disp_matrix[pairs[:, 0], pairs[:, 1]]  # pyright: ignore[reportPossiblyUnboundVariable]
-        sq_dist = sq_dist_matrix[pairs[:, 0], pairs[:, 1]]  # pyright: ignore[reportPossiblyUnboundVariable]
+        disp = disp_matrix[atom_i, atom_j]
+        sq_dist = sq_dist_matrix[atom_i, atom_j]
 
-    return pairs, disp, sq_dist
+    return np.array((atom_i, atom_j)).T, disp, sq_dist
 
 
 def _patch_adjacency_matrix(

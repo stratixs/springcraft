@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 import springcraft
-from tests.util import data_dir, load_protein_structure, prepare_anm
+from tests.util import ModifiedForceField, data_dir, load_protein_structure, prepare_anm
 
 
 def test_mass_weights_simple():
@@ -687,9 +687,7 @@ def test_modify_contact():
 
 
 def test_modify_atom():
-    pdb_file = pdb.PDBFile.read(join(data_dir(), "1l2y.pdb"))
-    atoms = pdb.get_structure(pdb_file, model=1)
-    ca = atoms[(atoms.atom_name == "CA") & (atoms.element == "C")]
+    ca = load_protein_structure("1l2y")
     ff = springcraft.TabulatedForceField.d_enm(ca)
     test_anm = springcraft.ANM(ca, ff)
 
