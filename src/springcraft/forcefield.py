@@ -105,7 +105,7 @@ class ForceField(metaclass=abc.ABCMeta):
         """
         pass
 
-    def update(self, atom_i: int, new_atom: struc.Atom, skip_checks=False) -> bool:
+    def update(self, atom_i: int, new_atom: struc.Atom) -> bool:
         """
         Allows a small pertubation to the `ForceField` if the `ForceField`
         depends on the `Atom` configuration in the model.
@@ -269,8 +269,8 @@ class PatchedForceField(ForceField):
             return force_constants
 
     @override
-    def update(self, atom_i: int, new_atom: struc.Atom, skip_checks=False) -> bool:
-        return self._force_field.update(atom_i, new_atom, skip_checks)
+    def update(self, atom_i: int, new_atom: struc.Atom) -> bool:
+        return self._force_field.update(atom_i, new_atom)
 
     @property
     @override
@@ -633,7 +633,7 @@ class TabulatedForceField(ForceField):
                     raise
 
     @override
-    def update(self, atom_i: int, new_atom: struc.Atom, skip_checks=False) -> bool:
+    def update(self, atom_i: int, new_atom: struc.Atom) -> bool:
         """
         Allows a small pertubation to the `ForceField` if the `ForceField`
         depends on the `Atom` configuration in the model. Results in a
@@ -653,14 +653,10 @@ class TabulatedForceField(ForceField):
         bool
             Whether the `ForceField` was updated.
         """
-        if not skip_checks:
-            if atom_i < 0 or atom_i >= self._natoms:
-                raise IndexError(
-                    f"Atom i {atom_i} out of bounds"
-                    f"for a structure of length {self._natoms}"
-                )
-            if not isinstance(new_atom, struc.Atom):
-                raise TypeError(f"New_atom needs to an Atom but was {type(new_atom)}")
+        if atom_i < 0 or atom_i >= self._natoms:
+            raise IndexError(
+                f"Atom i {atom_i} out of boundsfor a structure of length {self._natoms}"
+            )
 
         matrix_index = AA_TO_INDEX[new_atom.res_name]
         if self._matrix_indices[atom_i] == matrix_index:

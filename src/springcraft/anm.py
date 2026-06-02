@@ -14,6 +14,7 @@ from typing_extensions import Literal, Union, overload, override
 from springcraft import nma
 from springcraft.enm_pert import ENMPert
 from springcraft.forcefield import ForceField
+from springcraft.interaction import compute_hessian
 
 
 class ANM(ENMPert):
@@ -85,25 +86,9 @@ class ANM(ENMPert):
     def hessian(self) -> np.ndarray:
         if self._hessian is None:
             if self._covariance is None:
-                atom_i, atom_j, disp, sq_dist = self._calc_adjacency()
-                force_constants = self._ff.force_constant(atom_i, atom_j, sq_dist)
-
-                self._hessian = np.zeros((self._natoms, self._natoms, 3, 3))
-                self._hessian[atom_i, atom_j] = (
-                    -force_constants[:, np.newaxis, np.newaxis]
-                    / sq_dist[:, np.newaxis, np.newaxis]
-                    * disp[:, :, np.newaxis]
-                    * disp[:, np.newaxis, :]
+                self._hessian, _ = compute_hessian(
+                    self._coord, self._ff, self._use_cell_list
                 )
-                # Set values for main diagonal
-                indices = np.arange(self._natoms)
-                self._hessian[indices, indices] = -np.sum(self._hessian, axis=0)
-
-                # Reshape to (20*3, 20*3) matrix
-                self._hessian = np.transpose(self._hessian, (0, 2, 1, 3)).reshape(
-                    self._natoms * 3, self._natoms * 3
-                )
-
                 if self._mass_weight_matrix is not None:
                     self._hessian *= self._mass_weight_matrix
             else:
@@ -114,10 +99,10 @@ class ANM(ENMPert):
 
     @hessian.setter
     def hessian(self, value: np.ndarray):
-        if value.shape != (self._natoms * 3, self._natoms * 3):
+        if value.shape != (self._natoms * self.dof, self._natoms * self.dof):
             raise IndexError(
                 f"Expected shape "
-                f"{(self._natoms * 3, self._natoms * 3)}, "
+                f"{(self._natoms * self.dof, self._natoms * self.dof)}, "
                 f"got {value.shape}"
             )
         self._hessian = value
@@ -129,30 +114,110 @@ class ANM(ENMPert):
 
     @property
     @override
-    def dof_per_node(self) -> int:
+    def dof(self) -> int:
         """
         Returns
         -------
-        dof_per_node : int
+        dof : int
             Returns the Degree of Freedom per atom.
         """
         return 3
 
+    @override
+    def modify_atom(self, atom_i: int, new_atom: bool | struc.Atom):
+        super().modify_atom(atom_i, new_atom)
+
+        disp = self._coord - self._coord[atom_i]
+        sq_disp = disp * disp
+        sq_dist = np.sum(sq_disp, axis=1)
+        sq_dist[atom_i] = np.inf
+        comp = sq_disp[:, 0] / sq_dist
+        comp[atom_i] = np.inf
+
+        tmp = np.arange(0, self._natoms * self.dof, self.dof)
+        delta = self._hessian[atom_i * self.dof, tmp] / comp
+        delta[atom_i] = 0
+
+        if new_atom is not False:
+            # TODO ff contact_pair_on
+            if self._ff.cutoff_distance is None:
+                if atom_i > 0:
+                    delta[:atom_i] += self._ff.force_constant(
+                        np.repeat(atom_i, atom_i), np.arange(atom_i), sq_dist[:atom_i]
+                    )
+                if atom_i < self._natoms - 1:
+                    delta[atom_i + 1 :] += self._ff.force_constant(
+                        np.repeat(atom_i, self._natoms - atom_i - 1),
+                        np.arange(atom_i + 1, self._natoms),
+                        sq_dist[atom_i + 1 :],
+                    )
+            else:
+                idxs = np.argwhere(sq_dist <= self._ff.cutoff_distance**2).flatten()
+                delta[idxs] += self._ff.force_constant(
+                    np.repeat(atom_i, len(idxs)), idxs, sq_dist[idxs]
+                )
+
+        slice_i = slice(atom_i * self.dof, (atom_i + 1) * self.dof)
+        atom_j_idxs = np.argwhere(np.abs(delta) > 1e-9).flatten()
+        slice_t = disp[atom_j_idxs] / np.sqrt(sq_dist[atom_j_idxs]).reshape(
+            (len(atom_j_idxs), 1)
+        )
+        for k in np.argsort(sq_dist[atom_j_idxs]):
+            atom_j = atom_j_idxs[k]
+            slice_j = slice(atom_j * self.dof, (atom_j + 1) * self.dof)
+            if self._covariance is not None:
+                self._modify_covariance(slice_i, slice_j, slice_t[k], delta[atom_j])
+            self._modify_interactions(slice_i, slice_j, slice_t[k], delta[atom_j])
+
+    @override
+    def prepare_one_rank_update(
+        self, atom_i: int, atom_j: int, delta: bool | int | float
+    ) -> tuple[slice, slice, np.ndarray, float]:
+        super().prepare_one_rank_update(atom_i, atom_j, delta)
+
+        disp = self._coord[atom_j] - self._coord[atom_i]
+        sq_dist = disp @ disp
+        comp = disp[0] ** 2 / sq_dist
+        if delta is False:
+            # turn off contact
+            delta = self._hessian[atom_i * self.dof, atom_j * self.dof] / comp
+        elif delta is True:
+            # turn on contact (reset to original value)
+            if (
+                self._ff.cutoff_distance is None
+                or sq_dist <= self._ff.cutoff_distance**2
+            ):
+                # TODO ff contact_pair_on
+                delta = self._hessian[atom_i * self.dof, atom_j * self.dof] / comp
+                delta += self._ff.force_constant(  # pyright: ignore[reportAssignmentType]
+                    np.atleast_1d(atom_i),
+                    np.atleast_1d(atom_j),
+                    np.atleast_1d(sq_dist),
+                )
+
+        if np.abs(delta) < 1e-6:
+            raise ValueError("No change in interaction strength.")
+
+        return (
+            slice(atom_i * self.dof, (atom_i + 1) * self.dof),
+            slice(atom_j * self.dof, (atom_j + 1) * self.dof),
+            disp / np.sqrt(sq_dist),
+            delta,
+        )
+
     @overload
     def eigen(
-        self, zero_mask: Literal[False] = False, copy: bool = True
+        self, n_zero: Literal[False] = False, copy: bool = True
     ) -> tuple[np.ndarray, np.ndarray]: ...
 
     @overload
     def eigen(
-        self, zero_mask: Literal[True], copy: bool = True
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]: ...
+        self, n_zero: Literal[True], copy: bool = True
+    ) -> tuple[np.ndarray, np.ndarray, int]: ...
 
     def eigen(
-        self, zero_mask=False, copy=True
-    ) -> Union[
-        tuple[np.ndarray, np.ndarray], tuple[np.ndarray, np.ndarray, np.ndarray]
-    ]:
+        self, n_zero=False, copy=True
+    ) -> Union[tuple[np.ndarray, np.ndarray], tuple[np.ndarray, np.ndarray, int]]:
         """
         Compute or fetch the Eigenvalues and Eigenvectors of the
         *Hessian* matrix.
@@ -163,8 +228,9 @@ class ANM(ENMPert):
 
         Parameters
         ----------
-        zero_mask : bool, optional, default=False
-            Whether to return a mask of non-zero eigenvalues.
+        n_zero : bool, optional, default=False
+            Whether to return number of zero eigenvalues.
+            These are the first eigenvalues.
         copy : bool, optional, default=True
             Whether to return the eigenvalues and eigenvectors as copies.
             If you choose not to return copies a modification to these
@@ -172,17 +238,17 @@ class ANM(ENMPert):
 
         Returns
         -------
-        eig_values : ndarray, shape=(k,), dtype=float
+        eigen_values : ndarray, shape=(k,), dtype=float
             Eigenvalues of the *Hessian* matrix in ascending order.
-        eig_vectors : ndarray, shape=(k,n), dtype=float
+        eigen_vectors : ndarray, shape=(k,n), dtype=float
             Eigenvectors of the *Hessian* matrix.
             ``eig_values[i]`` corresponds to ``eig_vectors[i]``.
-        zero_mask : ndarray, shape(k,), dtype=bool, optional
-            The mask of non zero eigenvalues.
-            Only returned if ``zero_mask`` is set.
+        eigen_n_zero : int, optional
+            The number of the (first) zero eigenvalues.
+            Only returned if ``n_zero`` is set.
         """
-        self.hessian
-        return super().eigen(zero_mask, copy)
+        self.hessian  # calc hessian if non-existant
+        return super().eigen(n_zero, copy)
 
     def normal_mode(
         self,
@@ -343,42 +409,3 @@ class ANM(ENMPert):
     @override
     def _on_covariance_set(self):
         self._hessian = None
-
-    @override
-    def _prepare_one_rank_update(
-        self, atom_i: int, atom_j: int, delta: bool | int | float
-    ) -> tuple[slice, slice, np.ndarray, float]:
-        super()._prepare_one_rank_update(atom_i, atom_j, delta)
-
-        dof = self.dof_per_node
-
-        disp = self._coord[atom_j] - self._coord[atom_i]
-        sq_dist = disp @ disp
-        comp = disp[0] ** 2 / sq_dist
-
-        if delta is False:
-            # turn off contact
-            delta = self._hessian[atom_i * dof, atom_j * dof] / comp  # pyright: ignore[reportOptionalSubscript]
-        elif delta is True:
-            # turn on contact
-            delta = self._hessian[atom_i * dof, atom_j * dof] / comp  # pyright: ignore[reportOptionalSubscript]
-            if (
-                self._ff.cutoff_distance is None
-                or sq_dist <= self._ff.cutoff_distance**2
-            ):
-                # TODO ff contact_pair_on
-                delta += self._ff.force_constant(  # pyright: ignore[reportAssignmentType]
-                    np.atleast_1d(atom_i),
-                    np.atleast_1d(atom_j),
-                    np.atleast_1d(sq_dist),
-                )
-
-        if np.abs(delta) < 1e-10:
-            raise ValueError("No change in interaction strength.")
-
-        return (
-            slice(atom_i * dof, (atom_i + 1) * dof),
-            slice(atom_j * dof, (atom_j + 1) * dof),
-            disp / np.sqrt(sq_dist),
-            delta,
-        )
