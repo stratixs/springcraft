@@ -129,14 +129,14 @@ def test_modify_atom():
     assert np.allclose(test_gnm.covariance, ref_gnm.covariance)
 
 
-def test_freq_pert():
+def test_freq_chng():
     ca = load_protein_structure("1l2y")
     ff = springcraft.InvariantForceField(7.0)
 
     # positive delta
     test_gnm = springcraft.GNM(ca, ff)
     test_gnm.eigen()
-    freq = test_gnm.frequencies_pert(6, 8, 3)
+    freq = test_gnm.frequencies_chng(6, 8, 3)
 
     ref_ff = ModifiedForceField(ff, len(ca), [6], [8], [3])
     ref_gnm = springcraft.GNM(ca, ref_ff)
@@ -147,7 +147,7 @@ def test_freq_pert():
     # negative delta
     test_gnm = springcraft.GNM(ca, ff)
     test_gnm.eigen()
-    freq = test_gnm.frequencies_pert(6, 8, -3)
+    freq = test_gnm.frequencies_chng(6, 8, -3)
 
     ref_ff = ModifiedForceField(ff, len(ca), [6], [8], [-3])
     ref_gnm = springcraft.GNM(ca, ref_ff)
@@ -161,7 +161,7 @@ def test_freq_pert():
     for i in [5, 6, 7, 9, 10, 13]:
         test_gnm.modify_contact(i, 8, False)
     test_gnm.eigen()
-    freq = test_gnm.frequencies_pert(4, 8, False)
+    freq = test_gnm.frequencies_chng(4, 8, False)
 
     ref_ff = ModifiedForceField(
         ff,
@@ -178,7 +178,7 @@ def test_freq_pert():
     # rank increase
     test_gnm.modify_contact(4, 8, False)
     test_gnm.eigen()
-    freq = test_gnm.frequencies_pert(4, 8, True)
+    freq = test_gnm.frequencies_chng(4, 8, True)
 
     ref_ff = ModifiedForceField(
         ff,
@@ -193,7 +193,7 @@ def test_freq_pert():
     assert np.allclose(freq, ref_freq)
 
 
-def test_msqf_pert():
+def test_msqf_chng():
     ca = load_protein_structure("1l2y")
     ff = springcraft.InvariantForceField(7.0)
 
@@ -201,20 +201,18 @@ def test_msqf_pert():
     test_gnm = springcraft.GNM(ca, ff)
     test_gnm.kirchhoff
     test_gnm.covariance
-    msqf = test_gnm.mean_square_fluctuation()
-    msqf_pert = test_gnm.mean_square_fluctuation_pert(6, 8, 2)
+    msqf = test_gnm.mean_square_fluctuation_chng(6, 8, 2)
 
     ref_ff = ModifiedForceField(ff, len(ca), [6], [8], [2])
     ref_gnm = springcraft.GNM(ca, ref_ff)
     ref_gnm.kirchhoff
     ref_msqf = ref_gnm.mean_square_fluctuation()
-    assert np.allclose(msqf + msqf_pert, ref_msqf)
+    assert np.allclose(msqf, ref_msqf)
 
     # rank decrease
     for i in [5, 6, 7, 9, 10, 13]:
         test_gnm.modify_contact(i, 8, False)
-    msqf = test_gnm.mean_square_fluctuation()
-    msqf_pert = test_gnm.mean_square_fluctuation_pert(4, 8, False)
+    msqf = test_gnm.mean_square_fluctuation_chng(4, 8, False)
 
     ref_ff = ModifiedForceField(
         ff,
@@ -226,12 +224,11 @@ def test_msqf_pert():
     ref_gnm = springcraft.GNM(ca, ref_ff)
     ref_gnm.kirchhoff
     ref_msqf = ref_gnm.mean_square_fluctuation()
-    assert np.allclose(msqf + msqf_pert, ref_msqf)
+    assert np.allclose(msqf, ref_msqf)
 
     # rank increase
     test_gnm.modify_contact(4, 8, False)
-    msqf = test_gnm.mean_square_fluctuation()
-    msqf_pert = test_gnm.mean_square_fluctuation_pert(4, 8, True)
+    msqf = test_gnm.mean_square_fluctuation_chng(4, 8, True)
 
     ref_ff = ModifiedForceField(
         ff,
@@ -243,16 +240,15 @@ def test_msqf_pert():
     ref_gnm = springcraft.GNM(ca, ref_ff)
     ref_gnm.kirchhoff
     ref_msqf = ref_gnm.mean_square_fluctuation()
-    assert np.allclose(msqf + msqf_pert, ref_msqf)
+    assert np.allclose(msqf, ref_msqf)
 
     # temp scaling
-    msqf = test_gnm.mean_square_fluctuation(tem=300)
-    msqf_pert = test_gnm.mean_square_fluctuation_pert(4, 8, True, tem=300)
+    msqf = test_gnm.mean_square_fluctuation_chng(4, 8, True, tem=300)
     ref_msqf = ref_gnm.mean_square_fluctuation(tem=300)
-    assert np.allclose(msqf + msqf_pert, ref_msqf)
+    assert np.allclose(msqf, ref_msqf)
 
 
-def test_bfactor_pert():
+def test_bfactor_chng():
     ca = load_protein_structure("1l2y")
     ff = springcraft.InvariantForceField(7.0)
 
@@ -260,20 +256,18 @@ def test_bfactor_pert():
     test_gnm = springcraft.GNM(ca, ff)
     test_gnm.kirchhoff
     test_gnm.covariance
-    bfactor = test_gnm.bfactor()
-    bfactor_pert = test_gnm.bfactor_pert(6, 8, 2)
+    bfactor = test_gnm.bfactor_chng(6, 8, 2)
 
     ref_ff = ModifiedForceField(ff, len(ca), [6], [8], [2])
     ref_gnm = springcraft.GNM(ca, ref_ff)
     ref_gnm.kirchhoff
     ref_bfactor = ref_gnm.bfactor()
-    assert np.allclose(bfactor + bfactor_pert, ref_bfactor)
+    assert np.allclose(bfactor, ref_bfactor)
 
     # rank decrease
     for i in [5, 6, 7, 9, 10, 13]:
         test_gnm.modify_contact(i, 8, False)
-    bfactor = test_gnm.bfactor()
-    bfactor_pert = test_gnm.bfactor_pert(4, 8, False)
+    bfactor = test_gnm.bfactor_chng(4, 8, False)
 
     ref_ff = ModifiedForceField(
         ff,
@@ -285,12 +279,11 @@ def test_bfactor_pert():
     ref_gnm = springcraft.GNM(ca, ref_ff)
     ref_gnm.kirchhoff
     ref_bfactor = ref_gnm.bfactor()
-    assert np.allclose(bfactor + bfactor_pert, ref_bfactor)
+    assert np.allclose(bfactor, ref_bfactor)
 
     # rank increase
     test_gnm.modify_contact(4, 8, False)
-    bfactor = test_gnm.bfactor()
-    bfactor_pert = test_gnm.bfactor_pert(4, 8, True)
+    bfactor = test_gnm.bfactor_chng(4, 8, True)
 
     ref_ff = ModifiedForceField(
         ff,
@@ -302,10 +295,9 @@ def test_bfactor_pert():
     ref_gnm = springcraft.GNM(ca, ref_ff)
     ref_gnm.kirchhoff
     ref_bfactor = ref_gnm.bfactor()
-    assert np.allclose(bfactor + bfactor_pert, ref_bfactor)
+    assert np.allclose(bfactor, ref_bfactor)
 
     # temp scaling
-    bfactor = test_gnm.bfactor(tem=300)
-    bfactor_pert = test_gnm.bfactor_pert(4, 8, True, tem=300)
+    bfactor = test_gnm.bfactor_chng(4, 8, True, tem=300)
     ref_bfactor = ref_gnm.bfactor(tem=300)
-    assert np.allclose(bfactor + bfactor_pert, ref_bfactor)
+    assert np.allclose(bfactor, ref_bfactor)

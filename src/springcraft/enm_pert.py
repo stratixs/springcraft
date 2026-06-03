@@ -14,7 +14,7 @@ import numpy as np
 from scipy.linalg import blas
 from typing_extensions import Callable
 
-from springcraft import nma_pert
+from springcraft import nma_chng
 from springcraft.enm import ENM, K_B
 
 ger = blas.get_blas_funcs("ger", dtype=np.float64)
@@ -350,7 +350,7 @@ class ENMPert(ENM):
     def _default_ger(self, alpha: float, x: np.ndarray, y: np.ndarray):
         ger(alpha, x, y, a=self._covariance.T, overwrite_a=True)  # pyright: ignore[reportCallIssue]
 
-    def frequencies_pert(
+    def frequencies_chng(
         self,
         atom_i: int,
         atom_j: int,
@@ -387,9 +387,9 @@ class ENMPert(ENM):
         AttributeError
             If the ENM's eigenvalues and -vectors do not exist.
         """
-        return nma_pert.frequencies_pert(self, atom_i, atom_j, delta)
+        return nma_chng.frequencies_chng(self, atom_i, atom_j, delta)
 
-    def mean_square_fluctuation_pert(
+    def mean_square_fluctuation_chng(
         self,
         atom_i: int,
         atom_j: int,
@@ -432,11 +432,11 @@ class ENMPert(ENM):
         ValueError
             If the resulting `delta` is (nearly) 0.
         """
-        return nma_pert.mean_square_fluctuation_pert(
+        return nma_chng.mean_square_fluctuation_chng(
             self, atom_i, atom_j, delta, tem, tem_factors
         )
 
-    def bfactor_pert(
+    def bfactor_chng(
         self,
         atom_i: int,
         atom_j: int,
@@ -484,4 +484,4 @@ class ENMPert(ENM):
         ValueError
             If the resulting `delta` is (nearly) 0.
         """
-        return nma_pert.bfactor_pert(self, atom_i, atom_j, delta, tem, tem_factors)
+        return nma_chng.bfactor_chng(self, atom_i, atom_j, delta, tem, tem_factors)

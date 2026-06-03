@@ -5,15 +5,15 @@ functions for one-rank permutations.
 
 __name__ = "springcraft"
 __author__ = "Raphael Sutter"
-__all__ = ["mean_square_fluctuation_pert"]
+__all__ = ["frequencies_chng", "mean_square_fluctuation_chng", "bfactor_chng"]
 
 import numpy as np
 
 from springcraft.nma import K_B
-from springcraft.utils import eigenvalue_update
+from springcraft.utils import eigenvalue_chng
 
 
-def frequencies_pert(
+def frequencies_chng(
     enm,
     atom_i: int,
     atom_j: int,
@@ -72,15 +72,15 @@ def frequencies_pert(
     if np.any(np.abs(t) > 1e-6):
         eig_n_triv -= 1
 
-    eig_val_pert = eigenvalue_update(eig_val, eig_n_triv, z, np.asarray(delta).item())
+    eig_val_chng = eigenvalue_chng(eig_val, eig_n_triv, z, np.asarray(delta).item())
 
     # rank decrease protection (near zero but negative)
-    eig_val_pert[eig_n_triv] = np.abs(eig_val_pert[eig_n_triv])
+    eig_val_chng[eig_n_triv] = np.abs(eig_val_chng[eig_n_triv])
 
-    return 1 / (2 * np.pi) * np.sqrt(eig_val_pert)
+    return 1 / (2 * np.pi) * np.sqrt(eig_val_chng)
 
 
-def mean_square_fluctuation_pert(
+def mean_square_fluctuation_chng(
     enm,
     atom_i: int,
     atom_j: int,
@@ -132,11 +132,11 @@ def mean_square_fluctuation_pert(
     if not enm.has_covariance:
         raise ValueError("ENM does not have covariance.")
 
-    msqf_pert = np.zeros(enm._natoms * enm.dof)
+    msqf_chng = np.diag(enm.covariance).copy()
 
     def msqf_update(alpha, x, y):
-        nonlocal msqf_pert
-        msqf_pert += alpha * x * y
+        nonlocal msqf_chng
+        msqf_chng += alpha * x * y
 
     slice_i, slice_j, slice_t, delta = enm.prepare_one_rank_update(
         atom_i, atom_j, delta
@@ -144,16 +144,16 @@ def mean_square_fluctuation_pert(
     enm.covariance_rank_one_update(
         enm._interactions, enm.covariance, slice_i, slice_j, slice_t, delta, msqf_update
     )
-    msqf_pert = msqf_pert.reshape((-1, enm.dof)).sum(axis=1)
+    msqf_chng = msqf_chng.reshape((-1, enm.dof)).sum(axis=1)
 
     # Temperature weighting
     if tem is not None:
-        msqf_pert *= tem * tem_factors
+        msqf_chng *= tem * tem_factors
 
-    return msqf_pert
+    return msqf_chng
 
 
-def bfactor_pert(
+def bfactor_chng(
     enm,
     atom_i: int,
     atom_j: int,
@@ -201,14 +201,14 @@ def bfactor_pert(
     ValueError
         If the resulting `delta` is (nearly) 0.
     """
-    from springcraft.enm import ENM
+    from springcraft.enm_pert import ENMPert
 
-    if not isinstance(enm, ENM):
+    if not isinstance(enm, ENMPert):
         raise ValueError("Instance of ENM class expected.")
 
-    b_factors_pert = mean_square_fluctuation_pert(
+    b_factors_chng = mean_square_fluctuation_chng(
         enm, atom_i, atom_j, delta, tem, tem_factors
     )
-    b_factors_pert = ((8 * np.pi**2) * b_factors_pert) / 3
+    b_factors_chng = ((8 * np.pi**2) * b_factors_chng) / 3
 
-    return b_factors_pert
+    return b_factors_chng

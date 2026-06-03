@@ -10,7 +10,7 @@ from libc.math cimport sqrt
 cdef extern from "<algorithm>" namespace "std":
     void reverse[Iter](Iter first, Iter last)
 
-def eigenvalue_update(double[::1] d, int n_triv, double[::1] z, double rho):
+def eigenvalue_chng(double[::1] d, int n_triv, double[::1] z, double rho):
     """
     Computes the eigenvalues of a symmetric rank-one modified diagonal
     matrix using the LAPACK ``dlaed4`` routine.
@@ -56,16 +56,14 @@ def eigenvalue_update(double[::1] d, int n_triv, double[::1] z, double rho):
     The routine performs no argument checking internally.
     """
     cdef int n = d.shape[0]
-    cdef double[::1] d_val = d.copy()
+    cdef double[::1] d_val = np.empty(n, dtype=np.float64)
     cdef double[::1] z_val = np.empty(n, dtype=np.float64)
-    cdef double[::1] delta = np.empty(n, dtype=np.float64)
-    cdef double[::1] res = np.empty(n, dtype=np.float64)
-    cdef int i
-    for i in range(n_triv + 1):
-        res[i] = 0
+    cdef double[::1] res = np.empty(n, dtype=np.float64)  # updated eigenvalues
+    cdef double[::1] delta = np.empty(n, dtype=np.float64)  # buffer
 
     # norm z and adjust rho
     cdef double z_dot = 0
+    cdef int i
     for i in range(n):
         z_dot += z[i] * z[i]
     cdef double rho_val = rho * z_dot
@@ -75,15 +73,17 @@ def eigenvalue_update(double[::1] d, int n_triv, double[::1] z, double rho):
 
     cdef int info
     if rho > 0:
+        for i in range(n):
+            d_val[i] = d[i]
+
         for i in range(1 + n_triv, n + 1):  # dlaed4 requires 1-based index
             cython_lapack.dlaed4(&n, &i, &d_val[0], &z_val[0], &delta[0], &rho_val, &res[i-1], &info)
             if info != 0:
                 raise RuntimeError("LAPACK dlaed4 failed.")
     elif rho < 0:
-        reverse(&d_val[0], &d_val[0] + n)
-        reverse(&z_val[0], &z_val[0] + n)
         for i in range(n):
-            d_val[i] = -d_val[i]
+            d_val[i] = -d[n - 1 - i]
+        reverse(&z_val[0], &z_val[0] + n)
 
         rho_val = -rho_val
         for i in range(1, n + 1 - n_triv):  # dlaed4 requires 1-based index
@@ -97,4 +97,6 @@ def eigenvalue_update(double[::1] d, int n_triv, double[::1] z, double rho):
         raise ValueError("Rho must not be 0.")
 
 
+    for i in range(n_triv):
+        res[i] = 0
     return np.asarray(res)

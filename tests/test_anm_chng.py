@@ -133,14 +133,14 @@ def test_modify_atom():
     assert np.allclose(test_anm.covariance, ref_anm.covariance, atol=1e-7)
 
 
-def test_freq_pert():
+def test_freq_chng():
     ca = load_protein_structure("1l2y")
     ff = springcraft.InvariantForceField(7.0)
 
     # positive delta
     test_anm = springcraft.ANM(ca, ff)
     test_anm.eigen()
-    freq = test_anm.frequencies_pert(6, 8, 3)
+    freq = test_anm.frequencies_chng(6, 8, 3)
 
     ref_ff = ModifiedForceField(ff, len(ca), [6], [8], [3])
     ref_anm = springcraft.ANM(ca, ref_ff)
@@ -151,7 +151,7 @@ def test_freq_pert():
     # negative delta
     test_anm = springcraft.ANM(ca, ff)
     test_anm.eigen()
-    freq = test_anm.frequencies_pert(6, 8, -0.5)
+    freq = test_anm.frequencies_chng(6, 8, -0.5)
 
     ref_ff = ModifiedForceField(ff, len(ca), [6], [8], [-0.5])
     ref_anm = springcraft.ANM(ca, ref_ff)
@@ -165,7 +165,7 @@ def test_freq_pert():
     for i in [5, 6, 7, 9, 10, 13]:
         test_anm.modify_contact(i, 8, False)
     test_anm.eigen()
-    freq = test_anm.frequencies_pert(4, 8, False)
+    freq = test_anm.frequencies_chng(4, 8, False)
 
     ref_ff = ModifiedForceField(
         ff,
@@ -182,7 +182,7 @@ def test_freq_pert():
     # rank increase
     test_anm.modify_contact(4, 8, False)
     test_anm.eigen()
-    freq = test_anm.frequencies_pert(4, 8, True)
+    freq = test_anm.frequencies_chng(4, 8, True)
 
     ref_ff = ModifiedForceField(
         ff,
@@ -197,7 +197,7 @@ def test_freq_pert():
     assert np.allclose(freq, ref_freq)
 
 
-def test_msqf_pert():
+def test_msqf_chng():
     ca = load_protein_structure("1l2y")
     ff = springcraft.InvariantForceField(7.0)
 
@@ -205,20 +205,18 @@ def test_msqf_pert():
     test_anm = springcraft.ANM(ca, ff)
     test_anm.hessian
     test_anm.covariance
-    msqf = test_anm.mean_square_fluctuation()
-    msqf_pert = test_anm.mean_square_fluctuation_pert(6, 8, 2)
+    msqf = test_anm.mean_square_fluctuation_chng(6, 8, 2)
 
     ref_ff = ModifiedForceField(ff, len(ca), [6], [8], [2])
     ref_anm = springcraft.ANM(ca, ref_ff)
     ref_anm.hessian
     ref_msqf = ref_anm.mean_square_fluctuation()
-    assert np.allclose(msqf + msqf_pert, ref_msqf)
+    assert np.allclose(msqf, ref_msqf)
 
     # rank decrease
     for i in [5, 6, 7, 9, 10, 13]:
         test_anm.modify_contact(i, 8, False)
-    msqf = test_anm.mean_square_fluctuation()
-    msqf_pert = test_anm.mean_square_fluctuation_pert(4, 8, False)
+    msqf = test_anm.mean_square_fluctuation_chng(4, 8, False)
 
     ref_ff = ModifiedForceField(
         ff,
@@ -230,12 +228,11 @@ def test_msqf_pert():
     ref_anm = springcraft.ANM(ca, ref_ff)
     ref_anm.hessian
     ref_msqf = ref_anm.mean_square_fluctuation()
-    assert np.allclose(msqf + msqf_pert, ref_msqf)
+    assert np.allclose(msqf, ref_msqf)
 
     # rank increase
     test_anm.modify_contact(4, 8, False)
-    msqf = test_anm.mean_square_fluctuation()
-    msqf_pert = test_anm.mean_square_fluctuation_pert(4, 8, True)
+    msqf = test_anm.mean_square_fluctuation_chng(4, 8, True)
 
     ref_ff = ModifiedForceField(
         ff,
@@ -247,16 +244,15 @@ def test_msqf_pert():
     ref_anm = springcraft.ANM(ca, ref_ff)
     ref_anm.hessian
     ref_msqf = ref_anm.mean_square_fluctuation()
-    assert np.allclose(msqf + msqf_pert, ref_msqf)
+    assert np.allclose(msqf, ref_msqf)
 
     # temp scaling
-    msqf = test_anm.mean_square_fluctuation(tem=300)
-    msqf_pert = test_anm.mean_square_fluctuation_pert(4, 8, True, tem=300)
+    msqf = test_anm.mean_square_fluctuation_chng(4, 8, True, tem=300)
     ref_msqf = ref_anm.mean_square_fluctuation(tem=300)
-    assert np.allclose(msqf + msqf_pert, ref_msqf)
+    assert np.allclose(msqf, ref_msqf)
 
 
-def test_bfactor_pert():
+def test_bfactor_chng():
     ca = load_protein_structure("1l2y")
     ff = springcraft.InvariantForceField(7.0)
 
@@ -264,20 +260,18 @@ def test_bfactor_pert():
     test_anm = springcraft.ANM(ca, ff)
     test_anm.hessian
     test_anm.covariance
-    bfactor = test_anm.bfactor()
-    bfactor_pert = test_anm.bfactor_pert(6, 8, 2)
+    bfactor = test_anm.bfactor_chng(6, 8, 2)
 
     ref_ff = ModifiedForceField(ff, len(ca), [6], [8], [2])
     ref_anm = springcraft.ANM(ca, ref_ff)
     ref_anm.hessian
     ref_bfactor = ref_anm.bfactor()
-    assert np.allclose(bfactor + bfactor_pert, ref_bfactor)
+    assert np.allclose(bfactor, ref_bfactor)
 
     # rank decrease
     for i in [5, 6, 7, 9, 10, 13]:
         test_anm.modify_contact(i, 8, False)
-    bfactor = test_anm.bfactor()
-    bfactor_pert = test_anm.bfactor_pert(4, 8, False)
+    bfactor = test_anm.bfactor_chng(4, 8, False)
 
     ref_ff = ModifiedForceField(
         ff,
@@ -289,12 +283,11 @@ def test_bfactor_pert():
     ref_anm = springcraft.ANM(ca, ref_ff)
     ref_anm.hessian
     ref_bfactor = ref_anm.bfactor()
-    assert np.allclose(bfactor + bfactor_pert, ref_bfactor)
+    assert np.allclose(bfactor, ref_bfactor)
 
     # rank increase
     test_anm.modify_contact(4, 8, False)
-    bfactor = test_anm.bfactor()
-    bfactor_pert = test_anm.bfactor_pert(4, 8, True)
+    bfactor = test_anm.bfactor_chng(4, 8, True)
 
     ref_ff = ModifiedForceField(
         ff,
@@ -306,10 +299,9 @@ def test_bfactor_pert():
     ref_anm = springcraft.ANM(ca, ref_ff)
     ref_anm.hessian
     ref_bfactor = ref_anm.bfactor()
-    assert np.allclose(bfactor + bfactor_pert, ref_bfactor)
+    assert np.allclose(bfactor, ref_bfactor)
 
     # temp scaling
-    bfactor = test_anm.bfactor(tem=300)
-    bfactor_pert = test_anm.bfactor_pert(4, 8, True, tem=300)
+    bfactor = test_anm.bfactor_chng(4, 8, True, tem=300)
     ref_bfactor = ref_anm.bfactor(tem=300)
-    assert np.allclose(bfactor + bfactor_pert, ref_bfactor)
+    assert np.allclose(bfactor, ref_bfactor)
