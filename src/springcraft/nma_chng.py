@@ -10,7 +10,7 @@ __all__ = ["frequencies_chng", "mean_square_fluctuation_chng", "bfactor_chng"]
 import numpy as np
 
 from springcraft.nma import K_B
-from springcraft.utils import eigenvalue_chng
+from springcraft.utils import eigen_chng, eigenvalue_chng
 
 
 def frequencies_chng(
@@ -85,6 +85,7 @@ def mean_square_fluctuation_chng(
     atom_i: int,
     atom_j: int,
     delta: float | int | bool,
+    mode_subset: np.ndarray | None = None,
     tem: int | float | None = None,
     tem_factors: int | float = K_B,
 ) -> np.ndarray:
@@ -103,6 +104,10 @@ def mean_square_fluctuation_chng(
         Turning on resets the contact interaction strength to the initial value.
         Turning off sets the contact interaction strength to zero.
         A scalar value changes the contact interaction strength by the given amount.
+    mode_subset : ndarray, shape=(n,) or (3n,), dtype=int, optional
+        Specifies the subset of modes considered in the MSF computation.
+        The first mode is counted as 0 in accordance with Python conventions.
+        If mode_subset is None, all modes are included.
     tem : int, float, None, optional
         Temperature in Kelvin to compute the temperature scaling
         factor by multiplying with the Boltzmann constant.
@@ -121,7 +126,7 @@ def mean_square_fluctuation_chng(
     AttributeError
         If the `interaction` or `covariance` matrix does not exist.
     IndexError
-        If any index is out of bounds or the indices are the same
+        If any atom index is out of bounds or the indices are the same
     ValueError
         If the resulting `delta` is (nearly) 0.
     """
@@ -129,22 +134,56 @@ def mean_square_fluctuation_chng(
 
     if not isinstance(enm, ENMPert):
         raise ValueError("Instance of ENMPert class expected.")
-    if not enm.has_covariance:
-        raise ValueError("ENM does not have covariance.")
 
-    msqf_chng = np.diag(enm.covariance).copy()
+    if enm.has_covariance and mode_subset is None:
+        msqf_chng = np.diag(enm.covariance).copy()
 
-    def msqf_update(alpha, x, y):
-        nonlocal msqf_chng
-        msqf_chng += alpha * x * y
+        def msqf_update_fnc(alpha, x, y):
+            nonlocal msqf_chng
+            msqf_chng += alpha * x * y
 
-    slice_i, slice_j, slice_t, delta = enm.prepare_one_rank_update(
-        atom_i, atom_j, delta
-    )
-    enm.covariance_rank_one_update(
-        enm._interactions, enm.covariance, slice_i, slice_j, slice_t, delta, msqf_update
-    )
-    msqf_chng = msqf_chng.reshape((-1, enm.dof)).sum(axis=1)
+        slice_i, slice_j, slice_t, delta = enm.prepare_one_rank_update(
+            atom_i, atom_j, delta
+        )
+        enm.covariance_rank_one_update(
+            enm._interactions,
+            enm.covariance,
+            slice_i,
+            slice_j,
+            slice_t,
+            delta,
+            msqf_update_fnc,
+        )
+        msqf_chng = msqf_chng.reshape((-1, enm.dof)).sum(axis=1)
+    else:
+        eig_values, eig_vectors, n_triv = enm.eigen(n_zero=True)
+        eig_vectors = eig_vectors.T
+
+        # Choose modes included in computation; raise error, if trivial
+        # modes are included
+        if mode_subset is None:
+            mode_subset = np.arange(n_triv, len(eig_values))
+        elif np.any(mode_subset < n_triv):
+            raise ValueError(
+                "Trivial modes are included in the current selection. "
+                "Please check your input."
+            )
+
+        slice_i, slice_j, slice_t, delta = enm.prepare_one_rank_update(
+            atom_i, atom_j, delta
+        )
+        z = slice_t @ eig_vectors[slice_i] - slice_t @ eig_vectors[slice_j]
+
+        rho = np.asarray(delta).item()
+        mode_subset = mode_subset.astype(np.intc)
+        eig_values_pert, eig_vectors_delta = eigen_chng(eig_values, z, rho, mode_subset)
+
+        w = z / eig_vectors_delta
+        w = w / np.linalg.norm(w, axis=1).reshape(-1, 1)
+        eig_vectors_pert = w @ eig_vectors.T
+
+        msqf_chng = (eig_vectors_pert.T**2) @ (1 / eig_values_pert)
+        msqf_chng = msqf_chng.reshape(-1, enm.dof).sum(axis=1)
 
     # Temperature weighting
     if tem is not None:
@@ -158,6 +197,7 @@ def bfactor_chng(
     atom_i: int,
     atom_j: int,
     delta: float | int | bool,
+    mode_subset: np.ndarray | None = None,
     tem: int | float | None = None,
     tem_factors: int | float = K_B,
 ) -> np.ndarray:
@@ -179,6 +219,10 @@ def bfactor_chng(
         Turning on resets the contact interaction strength to the initial value.
         Turning off sets the contact interaction strength to zero.
         A scalar value changes the contact interaction strength by the given amount.
+    mode_subset : ndarray, shape=(n,) or (3n,), dtype=int, optional
+        Specifies the subset of modes considered in the MSF computation.
+        The first mode is counted as 0 in accordance with Python conventions.
+        If mode_subset is None, all modes are included.
     tem : int, float, None, optional
         Temperature in Kelvin to compute the temperature scaling
         factor by multiplying with the Boltzmann constant.
@@ -207,7 +251,7 @@ def bfactor_chng(
         raise ValueError("Instance of ENM class expected.")
 
     b_factors_chng = mean_square_fluctuation_chng(
-        enm, atom_i, atom_j, delta, tem, tem_factors
+        enm, atom_i, atom_j, delta, mode_subset, tem, tem_factors
     )
     b_factors_chng = ((8 * np.pi**2) * b_factors_chng) / 3
 

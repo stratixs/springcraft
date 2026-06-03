@@ -5,7 +5,7 @@ Extends the ENM base class with low rank perturbation calculation.
 
 __name__ = "springcraft"
 __author__ = "Raphael Sutter"
-__all__ = ["ENM"]
+__all__ = ["ENMPert"]
 
 from abc import abstractmethod
 
@@ -394,6 +394,7 @@ class ENMPert(ENM):
         atom_i: int,
         atom_j: int,
         delta: float | int | bool,
+        mode_subset: np.ndarray | None = None,
         tem: int | float | None = None,
         tem_factors: int | float = K_B,
     ) -> np.ndarray:
@@ -433,7 +434,7 @@ class ENMPert(ENM):
             If the resulting `delta` is (nearly) 0.
         """
         return nma_chng.mean_square_fluctuation_chng(
-            self, atom_i, atom_j, delta, tem, tem_factors
+            self, atom_i, atom_j, delta, mode_subset, tem, tem_factors
         )
 
     def bfactor_chng(
@@ -441,6 +442,7 @@ class ENMPert(ENM):
         atom_i: int,
         atom_j: int,
         delta: float | int | bool,
+        mode_subset: np.ndarray | None = None,
         tem: int | float | None = None,
         tem_factors: int | float = K_B,
     ) -> np.ndarray:
@@ -484,4 +486,6 @@ class ENMPert(ENM):
         ValueError
             If the resulting `delta` is (nearly) 0.
         """
-        return nma_chng.bfactor_chng(self, atom_i, atom_j, delta, tem, tem_factors)
+        return nma_chng.bfactor_chng(
+            self, atom_i, atom_j, delta, mode_subset, tem, tem_factors
+        )

@@ -248,6 +248,61 @@ def test_msqf_chng():
     assert np.allclose(msqf, ref_msqf)
 
 
+def test_msqf_subset_chng():
+    ca = load_protein_structure("1l2y")
+    ff = springcraft.InvariantForceField(7.0)
+
+    # no rank change
+    subset = np.array([5, 14, 18])
+    test_gnm = springcraft.GNM(ca, ff)
+    test_gnm.kirchhoff
+    msqf = test_gnm.mean_square_fluctuation_chng(6, 8, 2, subset)
+
+    ref_ff = ModifiedForceField(ff, len(ca), [6], [8], [2])
+    ref_gnm = springcraft.GNM(ca, ref_ff)
+    ref_gnm.kirchhoff
+    ref_msqf = ref_gnm.mean_square_fluctuation(subset)
+    assert np.allclose(msqf, ref_msqf)
+
+    # rank decrease
+    for i in [5, 6, 7, 9, 10, 13]:
+        test_gnm.modify_contact(i, 8, False)
+    msqf = test_gnm.mean_square_fluctuation_chng(4, 8, False, subset)
+
+    ref_ff = ModifiedForceField(
+        ff,
+        len(ca),
+        [4, 5, 6, 7, 9, 10, 13],
+        [8, 8, 8, 8, 8, 8, 8],
+        [-1, -1, -1, -1, -1, -1, -1],
+    )
+    ref_gnm = springcraft.GNM(ca, ref_ff)
+    ref_gnm.kirchhoff
+    ref_msqf = ref_gnm.mean_square_fluctuation(subset)
+    assert np.allclose(msqf, ref_msqf)
+
+    # rank increase
+    test_gnm.modify_contact(4, 8, False)
+    msqf = test_gnm.mean_square_fluctuation_chng(4, 8, True, subset)
+
+    ref_ff = ModifiedForceField(
+        ff,
+        len(ca),
+        [5, 6, 7, 9, 10, 13],
+        [8, 8, 8, 8, 8, 8],
+        [-1, -1, -1, -1, -1, -1],
+    )
+    ref_gnm = springcraft.GNM(ca, ref_ff)
+    ref_gnm.kirchhoff
+    ref_msqf = ref_gnm.mean_square_fluctuation(subset)
+    assert np.allclose(msqf, ref_msqf)
+
+    # temp scaling
+    msqf = test_gnm.mean_square_fluctuation_chng(4, 8, True, subset, tem=300)
+    ref_msqf = ref_gnm.mean_square_fluctuation(subset, tem=300)
+    assert np.allclose(msqf, ref_msqf)
+
+
 def test_bfactor_chng():
     ca = load_protein_structure("1l2y")
     ff = springcraft.InvariantForceField(7.0)
@@ -264,40 +319,28 @@ def test_bfactor_chng():
     ref_bfactor = ref_gnm.bfactor()
     assert np.allclose(bfactor, ref_bfactor)
 
-    # rank decrease
-    for i in [5, 6, 7, 9, 10, 13]:
-        test_gnm.modify_contact(i, 8, False)
-    bfactor = test_gnm.bfactor_chng(4, 8, False)
-
-    ref_ff = ModifiedForceField(
-        ff,
-        len(ca),
-        [4, 5, 6, 7, 9, 10, 13],
-        [8, 8, 8, 8, 8, 8, 8],
-        [-1, -1, -1, -1, -1, -1, -1],
-    )
-    ref_gnm = springcraft.GNM(ca, ref_ff)
-    ref_gnm.kirchhoff
-    ref_bfactor = ref_gnm.bfactor()
-    assert np.allclose(bfactor, ref_bfactor)
-
-    # rank increase
-    test_gnm.modify_contact(4, 8, False)
-    bfactor = test_gnm.bfactor_chng(4, 8, True)
-
-    ref_ff = ModifiedForceField(
-        ff,
-        len(ca),
-        [5, 6, 7, 9, 10, 13],
-        [8, 8, 8, 8, 8, 8],
-        [-1, -1, -1, -1, -1, -1],
-    )
-    ref_gnm = springcraft.GNM(ca, ref_ff)
-    ref_gnm.kirchhoff
-    ref_bfactor = ref_gnm.bfactor()
-    assert np.allclose(bfactor, ref_bfactor)
-
     # temp scaling
-    bfactor = test_gnm.bfactor_chng(4, 8, True, tem=300)
+    test_gnm = springcraft.GNM(ca, ff)
+    test_gnm.kirchhoff
+    test_gnm.covariance
+    bfactor = test_gnm.bfactor_chng(6, 8, 2, tem=300)
+
     ref_bfactor = ref_gnm.bfactor(tem=300)
+    assert np.allclose(bfactor, ref_bfactor)
+
+
+def test_bfactor_subset_chng():
+    ca = load_protein_structure("1l2y")
+    ff = springcraft.InvariantForceField(7.0)
+
+    # no rank change
+    subset = np.array([5, 14, 18])
+    test_gnm = springcraft.GNM(ca, ff)
+    test_gnm.kirchhoff
+    bfactor = test_gnm.mean_square_fluctuation_chng(6, 8, 2, subset)
+
+    ref_ff = ModifiedForceField(ff, len(ca), [6], [8], [2])
+    ref_gnm = springcraft.GNM(ca, ref_ff)
+    ref_gnm.kirchhoff
+    ref_bfactor = ref_gnm.mean_square_fluctuation(subset)
     assert np.allclose(bfactor, ref_bfactor)
