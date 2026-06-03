@@ -129,6 +129,70 @@ def test_modify_atom():
     assert np.allclose(test_gnm.covariance, ref_gnm.covariance)
 
 
+def test_freq_pert():
+    ca = load_protein_structure("1l2y")
+    ff = springcraft.InvariantForceField(7.0)
+
+    # positive delta
+    test_gnm = springcraft.GNM(ca, ff)
+    test_gnm.eigen()
+    freq = test_gnm.frequencies_pert(6, 8, 3)
+
+    ref_ff = ModifiedForceField(ff, len(ca), [6], [8], [3])
+    ref_gnm = springcraft.GNM(ca, ref_ff)
+    ref_gnm.kirchhoff
+    ref_freq = ref_gnm.frequencies()
+    assert np.allclose(freq, ref_freq)
+
+    # negative delta
+    test_gnm = springcraft.GNM(ca, ff)
+    test_gnm.eigen()
+    freq = test_gnm.frequencies_pert(6, 8, -3)
+
+    ref_ff = ModifiedForceField(ff, len(ca), [6], [8], [-3])
+    ref_gnm = springcraft.GNM(ca, ref_ff)
+    ref_gnm.kirchhoff
+    ref_freq = ref_gnm.frequencies()
+    assert np.allclose(freq, ref_freq)
+
+    # rank decrease
+    test_gnm = springcraft.GNM(ca, ff)
+    test_gnm.kirchhoff
+    for i in [5, 6, 7, 9, 10, 13]:
+        test_gnm.modify_contact(i, 8, False)
+    test_gnm.eigen()
+    freq = test_gnm.frequencies_pert(4, 8, False)
+
+    ref_ff = ModifiedForceField(
+        ff,
+        len(ca),
+        [4, 5, 6, 7, 9, 10, 13],
+        [8, 8, 8, 8, 8, 8, 8],
+        [-1, -1, -1, -1, -1, -1, -1],
+    )
+    ref_gnm = springcraft.GNM(ca, ref_ff)
+    ref_gnm.kirchhoff
+    ref_freq = ref_gnm.frequencies()
+    assert np.allclose(freq, ref_freq)
+
+    # rank increase
+    test_gnm.modify_contact(4, 8, False)
+    test_gnm.eigen()
+    freq = test_gnm.frequencies_pert(4, 8, True)
+
+    ref_ff = ModifiedForceField(
+        ff,
+        len(ca),
+        [5, 6, 7, 9, 10, 13],
+        [8, 8, 8, 8, 8, 8],
+        [-1, -1, -1, -1, -1, -1],
+    )
+    ref_gnm = springcraft.GNM(ca, ref_ff)
+    ref_gnm.kirchhoff
+    ref_freq = ref_gnm.frequencies()
+    assert np.allclose(freq, ref_freq)
+
+
 def test_msqf_pert():
     ca = load_protein_structure("1l2y")
     ff = springcraft.InvariantForceField(7.0)

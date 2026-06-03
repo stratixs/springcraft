@@ -133,6 +133,70 @@ def test_modify_atom():
     assert np.allclose(test_anm.covariance, ref_anm.covariance, atol=1e-7)
 
 
+def test_freq_pert():
+    ca = load_protein_structure("1l2y")
+    ff = springcraft.InvariantForceField(7.0)
+
+    # positive delta
+    test_anm = springcraft.ANM(ca, ff)
+    test_anm.eigen()
+    freq = test_anm.frequencies_pert(6, 8, 3)
+
+    ref_ff = ModifiedForceField(ff, len(ca), [6], [8], [3])
+    ref_anm = springcraft.ANM(ca, ref_ff)
+    ref_anm.hessian
+    ref_freq = ref_anm.frequencies()
+    assert np.allclose(freq, ref_freq)
+
+    # negative delta
+    test_anm = springcraft.ANM(ca, ff)
+    test_anm.eigen()
+    freq = test_anm.frequencies_pert(6, 8, -0.5)
+
+    ref_ff = ModifiedForceField(ff, len(ca), [6], [8], [-0.5])
+    ref_anm = springcraft.ANM(ca, ref_ff)
+    ref_anm.hessian
+    ref_freq = ref_anm.frequencies()
+    assert np.allclose(freq, ref_freq)
+
+    # rank decrease
+    test_anm = springcraft.ANM(ca, ff)
+    test_anm.hessian
+    for i in [5, 6, 7, 9, 10, 13]:
+        test_anm.modify_contact(i, 8, False)
+    test_anm.eigen()
+    freq = test_anm.frequencies_pert(4, 8, False)
+
+    ref_ff = ModifiedForceField(
+        ff,
+        len(ca),
+        [4, 5, 6, 7, 9, 10, 13],
+        [8, 8, 8, 8, 8, 8, 8],
+        [-1, -1, -1, -1, -1, -1, -1],
+    )
+    ref_anm = springcraft.ANM(ca, ref_ff)
+    ref_anm.hessian
+    ref_freq = ref_anm.frequencies()
+    assert np.allclose(freq, ref_freq)
+
+    # rank increase
+    test_anm.modify_contact(4, 8, False)
+    test_anm.eigen()
+    freq = test_anm.frequencies_pert(4, 8, True)
+
+    ref_ff = ModifiedForceField(
+        ff,
+        len(ca),
+        [5, 6, 7, 9, 10, 13],
+        [8, 8, 8, 8, 8, 8],
+        [-1, -1, -1, -1, -1, -1],
+    )
+    ref_anm = springcraft.ANM(ca, ref_ff)
+    ref_anm.hessian
+    ref_freq = ref_anm.frequencies()
+    assert np.allclose(freq, ref_freq)
+
+
 def test_msqf_pert():
     ca = load_protein_structure("1l2y")
     ff = springcraft.InvariantForceField(7.0)

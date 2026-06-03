@@ -10,13 +10,14 @@ __all__ = ["mean_square_fluctuation_pert"]
 import numpy as np
 
 from springcraft.nma import K_B
+from springcraft.utils import eigenvalue_update
 
 
-def frequencies_permutation(
+def frequencies_pert(
     enm,
     atom_i: int,
     atom_j: int,
-    delta: bool | int | float,
+    delta: float | int | bool,
 ) -> np.ndarray:
     """
     Computes the frequency associated with each mode for the permutated
@@ -30,9 +31,11 @@ def frequencies_permutation(
 
     Parameters
     ----------
+    enm : ENM
+        Elastic network model.
     atom_i, atom_j : int
         Atom index with ``atom_i != atom_j``
-    delta : bool | int | float
+    delta : bool or int or float
         A bool value gets interpreted as a turn on/off signal.
         Turning on resets the contact interaction strength to the initial value.
         Turning off sets the contact interaction strength to zero.
@@ -43,29 +46,38 @@ def frequencies_permutation(
     freq : ndarray, shape=(n,), dtype=float
         The frequency in ascending order of the associated modes'
         Eigenvalues.
-    """
-    if self._eigen_values is None or self._eigen_vectors is None:
-        raise AttributeError("Eigenvalues must be calculated beforehand.")
 
-    slice_i, slice_j, slice_t, delta = self._prepare_one_rank_update(
+    Raises
+    ------
+    AttributeError
+        If the ENM's eigenvalues and -vectors do not exist.
+    """
+    from springcraft.enm_pert import ENMPert
+
+    if not isinstance(enm, ENMPert):
+        raise ValueError("Instance of ENMPert class expected.")
+    if not enm.has_eigen:
+        raise AttributeError("The ENM's eigenvalues must be exist.")
+
+    eig_val, eig_vec, eig_n_triv = enm.eigen(n_zero=True, copy=False)
+    eig_vec = eig_vec.T
+
+    slice_i, slice_j, slice_t, delta = enm.prepare_one_rank_update(
         atom_i, atom_j, delta
     )
+    z = slice_t @ eig_vec[slice_i] - slice_t @ eig_vec[slice_j]
 
-    u = self._eigen_values
-    V = self._eigen_vectors
+    # check whether rank increases
+    t = slice_t @ (eig_vec[slice_i, :eig_n_triv] - eig_vec[slice_j, :eig_n_triv])
+    if np.any(np.abs(t) > 1e-6):
+        eig_n_triv -= 1
 
-    z = slice_t @ V[slice_i] - slice_t @ V[slice_j]
+    eig_val_pert = eigenvalue_update(eig_val, eig_n_triv, z, np.asarray(delta).item())
 
-    permutated_eig_values = []
-    if subset is None:
-        subset = np.arange(0, len(u))
-    else:
-        subset = np.atleast_1d(np.asarray(subset))
-    for i in subset:
-        value = eigenvalue_update(i, u, z, delta)
-        permutated_eig_values.append(value)
+    # rank decrease protection (near zero but negative)
+    eig_val_pert[eig_n_triv] = np.abs(eig_val_pert[eig_n_triv])
 
-    return frequencies_helper(np.array(permutated_eig_values))
+    return 1 / (2 * np.pi) * np.sqrt(eig_val_pert)
 
 
 def mean_square_fluctuation_pert(

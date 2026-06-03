@@ -20,6 +20,7 @@ def build() -> None:
         Extension(
             "*",
             ["src/springcraft/*.pyx"],
+            language="c++",
             extra_compile_args=COMPILE_ARGS,
             extra_link_args=LINK_ARGS,
             include_dirs=INCLUDE_DIRS,

@@ -291,9 +291,9 @@ class ENMPert(ENM):
             update(alpha=-delta / beta, x=x, y=x)
             return
 
-        y = -interactions @ x
-        y[slice_i] += slice_t
-        y[slice_j] -= slice_t
+        y = interactions @ x
+        y[slice_i] -= slice_t
+        y[slice_j] += slice_t
         y_dot = y @ y
         if y_dot < 1e-6:
             # still normal case but with more precision
@@ -302,8 +302,8 @@ class ENMPert(ENM):
 
         else:
             # rank increase
-            update(alpha=1 / -y_dot, x=x, y=y)
-            update(alpha=1 / -y_dot, x=y, y=x)
+            update(alpha=1 / y_dot, x=x, y=y)
+            update(alpha=1 / y_dot, x=y, y=x)
             update(alpha=beta / (delta * y_dot * y_dot), x=y, y=y)
             return
 
@@ -349,6 +349,45 @@ class ENMPert(ENM):
 
     def _default_ger(self, alpha: float, x: np.ndarray, y: np.ndarray):
         ger(alpha, x, y, a=self._covariance.T, overwrite_a=True)  # pyright: ignore[reportCallIssue]
+
+    def frequencies_pert(
+        self,
+        atom_i: int,
+        atom_j: int,
+        delta: float | int | bool,
+    ) -> np.ndarray:
+        """
+        Computes the frequency associated with each mode for the permutated
+        ENM where the interaction strength between atoms `i` and `j` is
+        changed by `delta`.
+
+        The modes corresponding to rigid-body translations/rotations are
+        omitted in the return value.
+        The returned units are arbitrary and should only be compared
+        relative to each other.
+
+        Parameters
+        ----------
+        atom_i, atom_j : int
+            Atom index with ``atom_i != atom_j``
+        delta : bool or int or float
+            A bool value gets interpreted as a turn on/off signal.
+            Turning on resets the contact interaction strength to the initial value.
+            Turning off sets the contact interaction strength to zero.
+            A scalar value changes the contact interaction strength by the given amount.
+
+        Returns
+        -------
+        freq : ndarray, shape=(n,), dtype=float
+            The frequency in ascending order of the associated modes'
+            Eigenvalues.
+
+        Raises
+        ------
+        AttributeError
+            If the ENM's eigenvalues and -vectors do not exist.
+        """
+        return nma_pert.frequencies_pert(self, atom_i, atom_j, delta)
 
     def mean_square_fluctuation_pert(
         self,

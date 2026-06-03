@@ -251,6 +251,16 @@ class ENM(ABC):
 
         return val, vec
 
+    @property
+    def has_eigen(self) -> bool:
+        """
+        Returns
+        -------
+        has_eigen : bool
+            Whether the eigenvalues and eigenvector are already calculated.
+        """
+        return self._eigen_values is not None and self._eigen_vectors is not None
+
     def frequencies(self) -> np.ndarray:
         """
         Compute the oscillation frequencies of the model.
