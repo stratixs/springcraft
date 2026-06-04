@@ -10,7 +10,7 @@ from libc.math cimport sqrt
 cdef extern from "<algorithm>" namespace "std":
     void reverse[Iter](Iter first, Iter last)
 
-def eigenvalue_chng(double[::1] d, int n_triv, double[::1] z, double rho):
+def eigenvalue_update(double[::1] d, int n_triv, double[::1] z, double rho):
     """
     Computes the eigenvalues of a symmetric rank-one modified diagonal
     matrix using the LAPACK ``dlaed4`` routine.
@@ -100,7 +100,7 @@ def eigenvalue_chng(double[::1] d, int n_triv, double[::1] z, double rho):
         res[i] = 0
     return np.asarray(res)
 
-def eigen_chng(double[::1] d, double[::1] z, double rho, int[::1] subset):
+def eigen_update(double[::1] d, double[::1] z, double rho, int[::1] subset):
     """
     Computes the eigenvalues of a symmetric rank-one modified diagonal
     matrix using the LAPACK ``dlaed4`` routine for a subset of eigenvalues.

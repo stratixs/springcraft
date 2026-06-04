@@ -5,7 +5,7 @@ Extends the ENM base class with low rank perturbation calculation.
 
 __name__ = "springcraft"
 __author__ = "Raphael Sutter"
-__all__ = ["ENMPert"]
+__all__ = ["ENMUpdate"]
 
 from abc import abstractmethod
 
@@ -14,13 +14,13 @@ import numpy as np
 from scipy.linalg import blas
 from typing_extensions import Callable
 
-from springcraft import nma_chng
+from springcraft import nma_update
 from springcraft.enm import ENM, K_B
 
 ger = blas.get_blas_funcs("ger", dtype=np.float64)
 
 
-class ENMPert(ENM):
+class ENMUpdate(ENM):
     def modify_contact(self, atom_i: int, atom_j: int, delta: bool | int | float):
         """
         Modifies the force constant in the `interaction` matrix between a
@@ -60,9 +60,7 @@ class ENMPert(ENM):
         ValueError
             If the resulting `delta` is (nearly) 0.
         """
-        slice_i, slice_j, slice_t, delta = self.prepare_one_rank_update(
-            atom_i, atom_j, delta
-        )
+        slice_i, slice_j, slice_t, delta = self.prepare_update(atom_i, atom_j, delta)
 
         if self._covariance is not None:
             self._modify_covariance(slice_i, slice_j, slice_t, delta)
@@ -70,8 +68,8 @@ class ENMPert(ENM):
         self._modify_interactions(slice_i, slice_j, slice_t, delta)
 
         # invalidate deoendant values
-        self._eigen_values = None
-        self._eigen_vectors = None
+        self._eig_values = None
+        self._eig_vectors = None
 
     @abstractmethod
     def modify_atom(self, atom_i: int, new_atom: bool | struc.Atom):
@@ -122,7 +120,7 @@ class ENMPert(ENM):
             raise ValueError("No change in atom detected.")
 
     @abstractmethod
-    def prepare_one_rank_update(
+    def prepare_update(
         self, atom_i: int, atom_j: int, delta: bool | int | float
     ) -> tuple[slice, slice, np.ndarray, float]:
         """
@@ -180,7 +178,7 @@ class ENMPert(ENM):
             raise IndexError("Cannot modify contact with itself.")
 
     @staticmethod
-    def interactions_rank_one_update(
+    def interactions_update(
         interactions: np.ndarray,
         slice_i: int | np.intp | slice,
         slice_j: int | np.intp | slice,
@@ -223,7 +221,7 @@ class ENMPert(ENM):
         interactions[slice_j, slice_j] += tensor
 
     @staticmethod
-    def covariance_rank_one_update(
+    def covariance_update(
         interactions: np.ndarray,
         covariance: np.ndarray,
         slice_i: int | np.intp | slice,
@@ -315,10 +313,10 @@ class ENMPert(ENM):
         delta: float,
     ):
         """
-        Application of the `covariance_rank_one_update` method to this
+        Application of the `covariance_update` method to this
         model's covariance matrix.
         """
-        self.interactions_rank_one_update(
+        self.interactions_update(
             self._interactions,
             slice_i,
             slice_j,
@@ -334,10 +332,10 @@ class ENMPert(ENM):
         delta: float,
     ):
         """
-        Application of the `interactions_rank_one_update` method to this
+        Application of the `interactions_update` method to this
         model's interaction matrix.
         """
-        self.covariance_rank_one_update(
+        self.covariance_update(
             self._interactions,
             self._covariance,
             slice_i,
@@ -350,7 +348,7 @@ class ENMPert(ENM):
     def _default_ger(self, alpha: float, x: np.ndarray, y: np.ndarray):
         ger(alpha, x, y, a=self._covariance.T, overwrite_a=True)  # pyright: ignore[reportCallIssue]
 
-    def frequencies_chng(
+    def frequencies_update(
         self,
         atom_i: int,
         atom_j: int,
@@ -387,9 +385,9 @@ class ENMPert(ENM):
         AttributeError
             If the ENM's eigenvalues and -vectors do not exist.
         """
-        return nma_chng.frequencies_chng(self, atom_i, atom_j, delta)
+        return nma_update.frequencies_update(self, atom_i, atom_j, delta)
 
-    def mean_square_fluctuation_chng(
+    def mean_square_fluctuation_update(
         self,
         atom_i: int,
         atom_j: int,
@@ -433,11 +431,11 @@ class ENMPert(ENM):
         ValueError
             If the resulting `delta` is (nearly) 0.
         """
-        return nma_chng.mean_square_fluctuation_chng(
+        return nma_update.mean_square_fluctuation_update(
             self, atom_i, atom_j, delta, mode_subset, tem, tem_factors
         )
 
-    def bfactor_chng(
+    def bfactor_update(
         self,
         atom_i: int,
         atom_j: int,
@@ -486,11 +484,11 @@ class ENMPert(ENM):
         ValueError
             If the resulting `delta` is (nearly) 0.
         """
-        return nma_chng.bfactor_chng(
+        return nma_update.bfactor_update(
             self, atom_i, atom_j, delta, mode_subset, tem, tem_factors
         )
 
-    def dcc_chng(
+    def dcc_update(
         self,
         atom_i: int,
         atom_j: int,
@@ -560,6 +558,6 @@ class ENMPert(ENM):
         Consequently, these are returned if standard parameters
         for 'mode_subset' and 'memory_efficient' are passed to the function.
         """
-        return nma_chng.dcc_chng(
+        return nma_update.dcc_update(
             self, atom_i, atom_j, delta, mode_subset, norm, tem, tem_factors
         )

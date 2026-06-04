@@ -11,12 +11,12 @@ import biotite.structure as struc
 import numpy as np
 from typing_extensions import Literal, Union, overload, override
 
-from springcraft.enm_pert import ENMPert
+from springcraft.enm_update import ENMUpdate
 from springcraft.forcefield import ForceField
 from springcraft.interaction import compute_kirchhoff
 
 
-class GNM(ENMPert):
+class GNM(ENMUpdate):
     """
     This class represents a *Gaussian Network Model*.
 
@@ -107,8 +107,8 @@ class GNM(ENMPert):
 
         # Invalidate dependent values
         self._covariance = None
-        self._eigen_values = None
-        self._eigen_vectors = None
+        self._eig_values = None
+        self._eig_vectors = None
 
     @property
     @override
@@ -158,10 +158,10 @@ class GNM(ENMPert):
             self._modify_interactions(atom_i, atom_j, None, delta[atom_j])
 
     @override
-    def prepare_one_rank_update(
+    def prepare_update(
         self, atom_i: int, atom_j: int, delta: bool | int | float
     ) -> tuple[slice, slice, np.ndarray, float]:
-        super().prepare_one_rank_update(atom_i, atom_j, delta)
+        super().prepare_update(atom_i, atom_j, delta)
 
         if delta is False:
             # turn off contact
@@ -225,9 +225,9 @@ class GNM(ENMPert):
 
         Returns
         -------
-        eigen_values : ndarray, shape=(k,), dtype=float
+        eig_values : ndarray, shape=(k,), dtype=float
             Eigenvalues of the *Kirchhoff* matrix in ascending order.
-        eigen_vectors : ndarray, shape=(k,n), dtype=float
+        eig_vectors : ndarray, shape=(k,n), dtype=float
             Eigenvectors of the *Kirchhoff* matrix.
             ``eig_values[i]`` corresponds to ``eigenvectors[i]``.
         eigen_n_zero : int, optional

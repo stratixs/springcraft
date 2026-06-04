@@ -5,18 +5,23 @@ functions for one-rank permutations.
 
 __name__ = "springcraft"
 __author__ = "Raphael Sutter"
-__all__ = ["frequencies_chng", "mean_square_fluctuation_chng", "bfactor_chng"]
+__all__ = [
+    "frequencies_update",
+    "mean_square_fluctuation_update",
+    "bfactor_update",
+    "dcc_update",
+]
 
 import numpy as np
 from scipy.linalg import blas
 
 from springcraft.nma import K_B
-from springcraft.utils import eigen_chng, eigenvalue_chng
+from springcraft.utils import eigen_update, eigenvalue_update
 
 ger = blas.get_blas_funcs("ger", dtype=np.float64)
 
 
-def frequencies_chng(
+def frequencies_update(
     enm,
     atom_i: int,
     atom_j: int,
@@ -55,35 +60,37 @@ def frequencies_chng(
     AttributeError
         If the ENM's eigenvalues and -vectors do not exist.
     """
-    from springcraft.enm_pert import ENMPert
+    from springcraft.enm_pert import ENMUpdate
 
-    if not isinstance(enm, ENMPert):
-        raise ValueError("Instance of ENMPert class expected.")
+    if not isinstance(enm, ENMUpdate):
+        raise ValueError("Instance of ENMUpdate class expected.")
     if not enm.has_eigen:
         raise AttributeError("The ENM's eigenvalues must be exist.")
 
-    eig_val, eig_vec, eig_n_triv = enm.eigen(n_zero=True, copy=False)
-    eig_vec = eig_vec.T
+    eig_values, eig_vectors, eig_n_triv = enm.eigen(n_zero=True, copy=False)
+    eig_vectors = eig_vectors.T
 
-    slice_i, slice_j, slice_t, delta = enm.prepare_one_rank_update(
-        atom_i, atom_j, delta
-    )
-    z = slice_t @ eig_vec[slice_i] - slice_t @ eig_vec[slice_j]
+    slice_i, slice_j, slice_t, delta = enm.prepare_update(atom_i, atom_j, delta)
+    z = slice_t @ eig_vectors[slice_i] - slice_t @ eig_vectors[slice_j]
 
     # check whether rank increases
-    t = slice_t @ (eig_vec[slice_i, :eig_n_triv] - eig_vec[slice_j, :eig_n_triv])
+    t = slice_t @ (
+        eig_vectors[slice_i, :eig_n_triv] - eig_vectors[slice_j, :eig_n_triv]
+    )
     if np.any(np.abs(t) > 1e-6):
         eig_n_triv -= 1
 
-    eig_val_chng = eigenvalue_chng(eig_val, eig_n_triv, z, np.asarray(delta).item())
+    eig_values_update = eigenvalue_update(
+        eig_values, eig_n_triv, z, np.asarray(delta).item()
+    )
 
     # rank decrease protection (near zero but negative)
-    eig_val_chng[eig_n_triv] = np.abs(eig_val_chng[eig_n_triv])
+    eig_values_update[eig_n_triv] = np.abs(eig_values_update[eig_n_triv])
 
-    return 1 / (2 * np.pi) * np.sqrt(eig_val_chng)
+    return 1 / (2 * np.pi) * np.sqrt(eig_values_update)
 
 
-def mean_square_fluctuation_chng(
+def mean_square_fluctuation_update(
     enm,
     atom_i: int,
     atom_j: int,
@@ -133,41 +140,41 @@ def mean_square_fluctuation_chng(
     ValueError
         If the resulting `delta` is (nearly) 0.
     """
-    from springcraft.enm_pert import ENMPert
+    from springcraft.enm_pert import ENMUpdate
 
-    if not isinstance(enm, ENMPert):
-        raise ValueError("Instance of ENMPert class expected.")
+    if not isinstance(enm, ENMUpdate):
+        raise ValueError("Instance of ENMUpdate class expected.")
 
     if enm.has_covariance and mode_subset is None:
-        msqf_chng = np.diag(enm.covariance).copy()
+        msqf_update = np.diag(enm.covariance).copy()
 
         def msqf_update_fnc(alpha, x, y):
-            nonlocal msqf_chng
-            msqf_chng += alpha * x * y
+            nonlocal msqf_update
+            msqf_update += alpha * x * y
 
-        enm.covariance_rank_one_update(
+        enm.covariance_update(
             enm._interactions,
             enm.covariance,
-            *enm.prepare_one_rank_update(atom_i, atom_j, delta),
+            *enm.prepare_update(atom_i, atom_j, delta),
             msqf_update_fnc,
         )
-        msqf_chng = msqf_chng.reshape((-1, enm.dof)).sum(axis=1)
+        msqf_update = msqf_update.reshape((-1, enm.dof)).sum(axis=1)
     else:
-        eig_values_pert, eig_vectors_pert = _calc_updated_eigen(
+        eig_values_update, eig_vectors_update = _calc_updated_eigen(
             enm, atom_i, atom_j, delta, mode_subset
         )
 
-        msqf_chng = (eig_vectors_pert.T**2) @ (1 / eig_values_pert)
-        msqf_chng = msqf_chng.reshape(-1, enm.dof).sum(axis=1)
+        msqf_update = (eig_vectors_update.T**2) @ (1 / eig_values_update)
+        msqf_update = msqf_update.reshape(-1, enm.dof).sum(axis=1)
 
     # Temperature weighting
     if tem is not None:
-        msqf_chng *= tem * tem_factors
+        msqf_update *= tem * tem_factors
 
-    return msqf_chng
+    return msqf_update
 
 
-def bfactor_chng(
+def bfactor_update(
     enm,
     atom_i: int,
     atom_j: int,
@@ -220,20 +227,20 @@ def bfactor_chng(
     ValueError
         If the resulting `delta` is (nearly) 0.
     """
-    from springcraft.enm_pert import ENMPert
+    from springcraft.enm_pert import ENMUpdate
 
-    if not isinstance(enm, ENMPert):
+    if not isinstance(enm, ENMUpdate):
         raise ValueError("Instance of ENM class expected.")
 
-    b_factors_chng = mean_square_fluctuation_chng(
+    b_factors_update = mean_square_fluctuation_update(
         enm, atom_i, atom_j, delta, mode_subset, tem, tem_factors
     )
-    b_factors_chng = ((8 * np.pi**2) * b_factors_chng) / 3
+    b_factors_update = ((8 * np.pi**2) * b_factors_update) / 3
 
-    return b_factors_chng
+    return b_factors_update
 
 
-def dcc_chng(
+def dcc_update(
     enm,
     atom_i: int,
     atom_j: int,
@@ -306,10 +313,10 @@ def dcc_chng(
     Consequently, these are returned if standard parameters
     for 'mode_subset' and 'memory_efficient' are passed to the function.
     """
-    from springcraft.enm import ENM
+    from springcraft.enm_pert import ENMUpdate
 
-    if not isinstance(enm, ENM):
-        raise ValueError("Instance of ENM class expected.")
+    if not isinstance(enm, ENMUpdate):
+        raise ValueError("Instance of ENMUpdate class expected.")
 
     if mode_subset is None:
         dcc_update = enm.covariance.copy()
@@ -318,10 +325,10 @@ def dcc_chng(
             nonlocal dcc_update
             ger(alpha, x, y, a=dcc_update.T, overwrite_a=True)
 
-        enm.covariance_rank_one_update(
+        enm.covariance_update(
             enm._interactions,
             enm.covariance,
-            *enm.prepare_one_rank_update(atom_i, atom_j, delta),
+            *enm.prepare_update(atom_i, atom_j, delta),
             dcc_update_fnc,
         )
 
@@ -333,13 +340,17 @@ def dcc_chng(
         )
 
     else:
-        eig_val_update, eig_vec_update = _calc_updated_eigen(
+        eig_values_update, eig_vectors_update = _calc_updated_eigen(
             enm, atom_i, atom_j, delta, mode_subset
         )
 
-        eig_vec_update = np.reshape(eig_vec_update, (len(mode_subset), -1, enm.dof))
-        eig_vec_update_scal = eig_vec_update / eig_val_update[:, None, None]
-        dcc_update = np.einsum("knd,kmd->nm", eig_vec_update, eig_vec_update_scal)
+        eig_vectors_update = np.reshape(
+            eig_vectors_update, (len(mode_subset), -1, enm.dof)
+        )
+        eig_vectors_update_scal = eig_vectors_update / eig_values_update[:, None, None]
+        dcc_update = np.einsum(
+            "knd,kmd->nm", eig_vectors_update, eig_vectors_update_scal
+        )
 
     # Compute the normalized DCC
     if norm:
@@ -367,7 +378,7 @@ def _calc_updated_eigen(
 
     Parameters
     ----------
-    enm : ENM
+    enm : ENMUpdate
         Elastic network model
     atom_i, atom_j : int
         Atom indices with ``atom_i != atom_j``
@@ -382,9 +393,9 @@ def _calc_updated_eigen(
 
     Returns
     -------
-    eigen_values : ndarray, shape=(n, n), dtype=float
+    eig_values : ndarray, shape=(n, n), dtype=float
         The updated subset of eigenvalues
-    eigen_values : ndarray, shape=(n, n), dtype=float
+    eig_values : ndarray, shape=(n, n), dtype=float
         The updated subset of corresponding eigenvectors.
     """
     eig_values, eig_vectors, n_triv = enm.eigen(n_zero=True)
@@ -400,17 +411,15 @@ def _calc_updated_eigen(
             "Please check your input."
         )
 
-    slice_i, slice_j, slice_t, delta = enm.prepare_one_rank_update(
-        atom_i, atom_j, delta
-    )
+    slice_i, slice_j, slice_t, delta = enm.prepare_update(atom_i, atom_j, delta)
     z = slice_t @ eig_vectors[slice_i] - slice_t @ eig_vectors[slice_j]
 
     rho = np.asarray(delta).item()
     mode_subset = mode_subset.astype(np.intc)
-    eig_values_pert, eig_vectors_delta = eigen_chng(eig_values, z, rho, mode_subset)
+    eig_values_update, eig_vectors_delta = eigen_update(eig_values, z, rho, mode_subset)
 
     w = z / eig_vectors_delta
     w = w / np.linalg.norm(w, axis=1).reshape(-1, 1)
-    eig_vectors_pert = w @ eig_vectors.T
+    eig_vectors_update = w @ eig_vectors.T
 
-    return eig_values_pert, eig_vectors_pert
+    return eig_values_update, eig_vectors_update

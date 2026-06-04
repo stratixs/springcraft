@@ -72,8 +72,8 @@ class ENM(ABC):
     # pseudo-inverse of the _interaction matrix
     _covariance: np.ndarray | None
     # eigenvalues/-vectors of the _interaction matrix
-    _eigen_values: np.ndarray | None
-    _eigen_vectors: np.ndarray | None
+    _eig_values: np.ndarray | None
+    _eig_vectors: np.ndarray | None
     # ForceField defining the atom interactions
     _ff: ForceField
     # atom masses
@@ -123,8 +123,8 @@ class ENM(ABC):
             self._mass_weight_matrix = None
 
         self._covariance = None
-        self._eigen_values = None
-        self._eigen_vectors = None
+        self._eig_values = None
+        self._eig_vectors = None
 
     @property
     def masses(self) -> np.ndarray | None:
@@ -152,8 +152,8 @@ class ENM(ABC):
         self._covariance = value
 
         # invalidate dependant values
-        self._eigen_values = None
-        self._eigen_vectors = None
+        self._eig_values = None
+        self._eig_vectors = None
 
         self._on_covariance_set()
 
@@ -205,32 +205,32 @@ class ENM(ABC):
 
         Returns
         -------
-        eigen_values : ndarray, shape=(k,), dtype=float
+        eig_values : ndarray, shape=(k,), dtype=float
             Eigenvalues of the matrix in ascending order.
-        eigen_vectors : ndarray, shape=(k,n), dtype=float
+        eig_vectors : ndarray, shape=(k,n), dtype=float
             Eigenvectors of the matrix.
             ``eig_values[i]`` corresponds to ``eigenvectors[i]``.
         eigen_n_zero : int, optional
             The number of the (first) zero eigenvalues.
             Only returned if ``n_zero`` is set.
         """
-        if self._eigen_values is None or self._eigen_vectors is None:
+        if self._eig_values is None or self._eig_vectors is None:
             assert self._interactions is not None  # should never happen
 
-            self._eigen_values, self._eigen_vectors = np.linalg.eigh(self._interactions)
+            self._eig_values, self._eig_vectors = np.linalg.eigh(self._interactions)
 
-            threshold = self._eigen_values[-1] * 1e-6  # max(eigen_values) * 10^-6
+            threshold = self._eig_values[-1] * 1e-6  # max(eig_values) * 10^-6
             i = 0
-            while self._eigen_values[i] < -threshold:
+            while self._eig_values[i] < -threshold:
                 i = i + 1
             n_neg = i
-            while self._eigen_values[i] <= threshold:
+            while self._eig_values[i] <= threshold:
                 i = i + 1
             n_triv = i + n_neg
 
             if n_neg:
                 # numerical error with some eigenvalues below 0
-                v, V, n, m = self._eigen_values, self._eigen_vectors, n_neg, n_triv
+                v, V, n, m = self._eig_values, self._eig_vectors, n_neg, n_triv
                 v[:m], v[m : m + n] = v[n : n + m].copy(), v[:n].copy()
                 V[:, :m], V[:, m : m + n] = V[:, n : n + m].copy(), V[:, :n].copy()
 
@@ -240,8 +240,8 @@ class ENM(ABC):
 
             self._eigen_n_zero = n_triv
 
-        val = self._eigen_values
-        vec = self._eigen_vectors.T
+        val = self._eig_values
+        vec = self._eig_vectors.T
         if copy:
             val = val.copy()
             vec = vec.copy()
@@ -259,7 +259,7 @@ class ENM(ABC):
         has_eigen : bool
             Whether the eigenvalues and eigenvector are already calculated.
         """
-        return self._eigen_values is not None and self._eigen_vectors is not None
+        return self._eig_values is not None and self._eig_vectors is not None
 
     def frequencies(self) -> np.ndarray:
         """

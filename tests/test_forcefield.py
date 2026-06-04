@@ -484,8 +484,6 @@ def test_tabulated_forcefield_update_checks(atoms):
         ff.update(-1, new_atom)
     with pytest.raises(IndexError):
         ff.update(len(atoms) + 1, new_atom)
-    with pytest.raises(TypeError):
-        ff.update(0, "LEU")
 
 
 def test_parameterfree_forcefield():

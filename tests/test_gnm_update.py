@@ -129,14 +129,14 @@ def test_modify_atom():
     assert np.allclose(test_gnm.covariance, ref_gnm.covariance)
 
 
-def test_freq_chng():
+def test_freq_update():
     ca = load_protein_structure("1l2y")
     ff = springcraft.InvariantForceField(7.0)
 
     # positive delta
     test_gnm = springcraft.GNM(ca, ff)
     test_gnm.eigen()
-    freq = test_gnm.frequencies_chng(6, 8, 3)
+    freq = test_gnm.frequencies_update(6, 8, 3)
 
     ref_ff = ModifiedForceField(ff, len(ca), [6], [8], [3])
     ref_gnm = springcraft.GNM(ca, ref_ff)
@@ -147,7 +147,7 @@ def test_freq_chng():
     # negative delta
     test_gnm = springcraft.GNM(ca, ff)
     test_gnm.eigen()
-    freq = test_gnm.frequencies_chng(6, 8, -3)
+    freq = test_gnm.frequencies_update(6, 8, -3)
 
     ref_ff = ModifiedForceField(ff, len(ca), [6], [8], [-3])
     ref_gnm = springcraft.GNM(ca, ref_ff)
@@ -161,7 +161,7 @@ def test_freq_chng():
     for i in [5, 6, 7, 9, 10, 13]:
         test_gnm.modify_contact(i, 8, False)
     test_gnm.eigen()
-    freq = test_gnm.frequencies_chng(4, 8, False)
+    freq = test_gnm.frequencies_update(4, 8, False)
 
     ref_ff = ModifiedForceField(
         ff,
@@ -178,7 +178,7 @@ def test_freq_chng():
     # rank increase
     test_gnm.modify_contact(4, 8, False)
     test_gnm.eigen()
-    freq = test_gnm.frequencies_chng(4, 8, True)
+    freq = test_gnm.frequencies_update(4, 8, True)
 
     ref_ff = ModifiedForceField(
         ff,
@@ -193,7 +193,7 @@ def test_freq_chng():
     assert np.allclose(freq, ref_freq)
 
 
-def test_msqf_chng():
+def test_msqf_update():
     ca = load_protein_structure("1l2y")
     ff = springcraft.InvariantForceField(7.0)
 
@@ -201,7 +201,7 @@ def test_msqf_chng():
     test_gnm = springcraft.GNM(ca, ff)
     test_gnm.kirchhoff
     test_gnm.covariance
-    msqf = test_gnm.mean_square_fluctuation_chng(6, 8, 2)
+    msqf = test_gnm.mean_square_fluctuation_update(6, 8, 2)
 
     ref_ff = ModifiedForceField(ff, len(ca), [6], [8], [2])
     ref_gnm = springcraft.GNM(ca, ref_ff)
@@ -212,7 +212,7 @@ def test_msqf_chng():
     # rank decrease
     for i in [5, 6, 7, 9, 10, 13]:
         test_gnm.modify_contact(i, 8, False)
-    msqf = test_gnm.mean_square_fluctuation_chng(4, 8, False)
+    msqf = test_gnm.mean_square_fluctuation_update(4, 8, False)
 
     ref_ff = ModifiedForceField(
         ff,
@@ -228,7 +228,7 @@ def test_msqf_chng():
 
     # rank increase
     test_gnm.modify_contact(4, 8, False)
-    msqf = test_gnm.mean_square_fluctuation_chng(4, 8, True)
+    msqf = test_gnm.mean_square_fluctuation_update(4, 8, True)
 
     ref_ff = ModifiedForceField(
         ff,
@@ -243,12 +243,12 @@ def test_msqf_chng():
     assert np.allclose(msqf, ref_msqf)
 
     # temp scaling
-    msqf = test_gnm.mean_square_fluctuation_chng(4, 8, True, tem=300)
+    msqf = test_gnm.mean_square_fluctuation_update(4, 8, True, tem=300)
     ref_msqf = ref_gnm.mean_square_fluctuation(tem=300)
     assert np.allclose(msqf, ref_msqf)
 
 
-def test_msqf_subset_chng():
+def test_msqf_subset_update():
     ca = load_protein_structure("1l2y")
     ff = springcraft.InvariantForceField(7.0)
 
@@ -256,7 +256,7 @@ def test_msqf_subset_chng():
     subset = np.array([5, 14, 18])
     test_gnm = springcraft.GNM(ca, ff)
     test_gnm.kirchhoff
-    msqf = test_gnm.mean_square_fluctuation_chng(6, 8, 2, subset)
+    msqf = test_gnm.mean_square_fluctuation_update(6, 8, 2, subset)
 
     ref_ff = ModifiedForceField(ff, len(ca), [6], [8], [2])
     ref_gnm = springcraft.GNM(ca, ref_ff)
@@ -267,7 +267,7 @@ def test_msqf_subset_chng():
     # rank decrease
     for i in [5, 6, 7, 9, 10, 13]:
         test_gnm.modify_contact(i, 8, False)
-    msqf = test_gnm.mean_square_fluctuation_chng(4, 8, False, subset)
+    msqf = test_gnm.mean_square_fluctuation_update(4, 8, False, subset)
 
     ref_ff = ModifiedForceField(
         ff,
@@ -283,7 +283,7 @@ def test_msqf_subset_chng():
 
     # rank increase
     test_gnm.modify_contact(4, 8, False)
-    msqf = test_gnm.mean_square_fluctuation_chng(4, 8, True, subset)
+    msqf = test_gnm.mean_square_fluctuation_update(4, 8, True, subset)
 
     ref_ff = ModifiedForceField(
         ff,
@@ -298,12 +298,12 @@ def test_msqf_subset_chng():
     assert np.allclose(msqf, ref_msqf)
 
     # temp scaling
-    msqf = test_gnm.mean_square_fluctuation_chng(4, 8, True, subset, tem=300)
+    msqf = test_gnm.mean_square_fluctuation_update(4, 8, True, subset, tem=300)
     ref_msqf = ref_gnm.mean_square_fluctuation(subset, tem=300)
     assert np.allclose(msqf, ref_msqf)
 
 
-def test_bfactor_chng():
+def test_bfactor_update():
     ca = load_protein_structure("1l2y")
     ff = springcraft.InvariantForceField(7.0)
 
@@ -311,7 +311,7 @@ def test_bfactor_chng():
     test_gnm = springcraft.GNM(ca, ff)
     test_gnm.kirchhoff
     test_gnm.covariance
-    bfactor = test_gnm.bfactor_chng(6, 8, 2)
+    bfactor = test_gnm.bfactor_update(6, 8, 2)
 
     ref_ff = ModifiedForceField(ff, len(ca), [6], [8], [2])
     ref_gnm = springcraft.GNM(ca, ref_ff)
@@ -323,13 +323,13 @@ def test_bfactor_chng():
     test_gnm = springcraft.GNM(ca, ff)
     test_gnm.kirchhoff
     test_gnm.covariance
-    bfactor = test_gnm.bfactor_chng(6, 8, 2, tem=300)
+    bfactor = test_gnm.bfactor_update(6, 8, 2, tem=300)
 
     ref_bfactor = ref_gnm.bfactor(tem=300)
     assert np.allclose(bfactor, ref_bfactor)
 
 
-def test_bfactor_subset_chng():
+def test_bfactor_subset_update():
     ca = load_protein_structure("1l2y")
     ff = springcraft.InvariantForceField(7.0)
 
@@ -337,7 +337,7 @@ def test_bfactor_subset_chng():
     subset = np.array([5, 14, 18])
     test_gnm = springcraft.GNM(ca, ff)
     test_gnm.kirchhoff
-    bfactor = test_gnm.bfactor_chng(6, 8, 2, subset)
+    bfactor = test_gnm.bfactor_update(6, 8, 2, subset)
 
     ref_ff = ModifiedForceField(ff, len(ca), [6], [8], [2])
     ref_gnm = springcraft.GNM(ca, ref_ff)
@@ -346,7 +346,7 @@ def test_bfactor_subset_chng():
     assert np.allclose(bfactor, ref_bfactor)
 
 
-def test_dcc_chng():
+def test_dcc_update():
     ca = load_protein_structure("1l2y")
     ff = springcraft.InvariantForceField(7.0)
 
@@ -354,7 +354,7 @@ def test_dcc_chng():
     test_gnm = springcraft.GNM(ca, ff)
     test_gnm.kirchhoff
     test_gnm.covariance
-    dcc = test_gnm.dcc_chng(6, 8, 2)
+    dcc = test_gnm.dcc_update(6, 8, 2)
 
     ref_ff = ModifiedForceField(ff, len(ca), [6], [8], [2])
     ref_gnm = springcraft.GNM(ca, ref_ff)
@@ -365,7 +365,7 @@ def test_dcc_chng():
     # rank decrease
     for i in [5, 6, 7, 9, 10, 13]:
         test_gnm.modify_contact(i, 8, False)
-    dcc = test_gnm.dcc_chng(4, 8, False, norm=False)
+    dcc = test_gnm.dcc_update(4, 8, False, norm=False)
 
     ref_ff = ModifiedForceField(
         ff,
@@ -381,7 +381,7 @@ def test_dcc_chng():
 
     # rank increase
     test_gnm.modify_contact(4, 8, False)
-    dcc = test_gnm.dcc_chng(4, 8, True)
+    dcc = test_gnm.dcc_update(4, 8, True)
 
     ref_ff = ModifiedForceField(
         ff,
@@ -396,12 +396,12 @@ def test_dcc_chng():
     assert np.allclose(dcc, ref_dcc)
 
     # temp scaling
-    dcc = test_gnm.dcc_chng(4, 8, True, tem=300)
+    dcc = test_gnm.dcc_update(4, 8, True, tem=300)
     ref_dcc = ref_gnm.dcc(tem=300)
     assert np.allclose(dcc, ref_dcc)
 
 
-def test_dcc_subset_chng():
+def test_dcc_subset_update():
     ca = load_protein_structure("1l2y")
     ff = springcraft.InvariantForceField(7.0)
 
@@ -409,7 +409,7 @@ def test_dcc_subset_chng():
     subset = np.array([5, 14, 18])
     test_gnm = springcraft.GNM(ca, ff)
     test_gnm.kirchhoff
-    dcc = test_gnm.dcc_chng(6, 8, 2, subset)
+    dcc = test_gnm.dcc_update(6, 8, 2, subset)
 
     ref_ff = ModifiedForceField(ff, len(ca), [6], [8], [2])
     ref_gnm = springcraft.GNM(ca, ref_ff)
@@ -420,7 +420,7 @@ def test_dcc_subset_chng():
     # rank decrease
     for i in [5, 6, 7, 9, 10, 13]:
         test_gnm.modify_contact(i, 8, False)
-    dcc = test_gnm.dcc_chng(4, 8, False, subset, norm=False)
+    dcc = test_gnm.dcc_update(4, 8, False, subset, norm=False)
 
     ref_ff = ModifiedForceField(
         ff,
@@ -436,7 +436,7 @@ def test_dcc_subset_chng():
 
     # rank increase
     test_gnm.modify_contact(4, 8, False)
-    dcc = test_gnm.dcc_chng(4, 8, True, subset)
+    dcc = test_gnm.dcc_update(4, 8, True, subset)
 
     ref_ff = ModifiedForceField(
         ff,
@@ -451,6 +451,6 @@ def test_dcc_subset_chng():
     assert np.allclose(dcc, ref_dcc)
 
     # temp scaling
-    dcc = test_gnm.dcc_chng(4, 8, True, subset, tem=300)
+    dcc = test_gnm.dcc_update(4, 8, True, subset, tem=300)
     ref_dcc = ref_gnm.dcc(subset, tem=300)
     assert np.allclose(dcc, ref_dcc)

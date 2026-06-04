@@ -12,12 +12,12 @@ import numpy as np
 from typing_extensions import Literal, Union, overload, override
 
 from springcraft import nma
-from springcraft.enm_pert import ENMPert
+from springcraft.enm_update import ENMUpdate
 from springcraft.forcefield import ForceField
 from springcraft.interaction import compute_hessian
 
 
-class ANM(ENMPert):
+class ANM(ENMUpdate):
     """
     This class represents an *Anisotropic Network Model*.
 
@@ -109,8 +109,8 @@ class ANM(ENMPert):
 
         # Invalidate dependent values
         self._covariance = None
-        self._eigen_values = None
-        self._eigen_vectors = None
+        self._eig_values = None
+        self._eig_vectors = None
 
     @property
     @override
@@ -170,10 +170,10 @@ class ANM(ENMPert):
             self._modify_interactions(slice_i, slice_j, slice_t[k], delta[atom_j])
 
     @override
-    def prepare_one_rank_update(
+    def prepare_update(
         self, atom_i: int, atom_j: int, delta: bool | int | float
     ) -> tuple[slice, slice, np.ndarray, float]:
-        super().prepare_one_rank_update(atom_i, atom_j, delta)
+        super().prepare_update(atom_i, atom_j, delta)
 
         disp = self._coord[atom_j] - self._coord[atom_i]
         sq_dist = disp @ disp
@@ -238,9 +238,9 @@ class ANM(ENMPert):
 
         Returns
         -------
-        eigen_values : ndarray, shape=(k,), dtype=float
+        eig_values : ndarray, shape=(k,), dtype=float
             Eigenvalues of the *Hessian* matrix in ascending order.
-        eigen_vectors : ndarray, shape=(k,n), dtype=float
+        eig_vectors : ndarray, shape=(k,n), dtype=float
             Eigenvectors of the *Hessian* matrix.
             ``eig_values[i]`` corresponds to ``eig_vectors[i]``.
         eigen_n_zero : int, optional
