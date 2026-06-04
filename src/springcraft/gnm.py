@@ -53,7 +53,7 @@ class GNM(ENMUpdate):
         This is not a copy: Create a copy before modifying this matrix.
     covariance : ndarray, shape=(n,n), dtype=float
         The covariance matrix for this model, i.e. the inverted
-        *Kirchhofff* matrix. The returned covariance matrix is not scaled
+        *Kirchhoff* matrix. The returned covariance matrix is not scaled
         correctly and does not have the correct unit. To obtain the true
         covariance matrix, you can calculate
 
@@ -61,7 +61,7 @@ class GNM(ENMUpdate):
 
             \\text{Cov}_\\text{true} = k_B T \\text{Cov}
 
-        with Boltzman constant :math:`k_B` and absolut temperature
+        with Boltzmann constant :math:`k_B` and absolute temperature
         :math:`[T] = K` in Kelvin.
 
         This is not a copy: Create a copy before modifying this matrix.
@@ -229,7 +229,7 @@ class GNM(ENMUpdate):
             Eigenvalues of the *Kirchhoff* matrix in ascending order.
         eig_vectors : ndarray, shape=(k,n), dtype=float
             Eigenvectors of the *Kirchhoff* matrix.
-            ``eig_values[i]`` corresponds to ``eigenvectors[i]``.
+            ``eig_values[i]`` corresponds to ``eig_vectors[i]``.
         eigen_n_zero : int, optional
             The number of the (first) zero eigenvalues.
             Only returned if ``n_zero`` is set.

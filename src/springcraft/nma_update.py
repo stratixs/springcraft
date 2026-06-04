@@ -42,7 +42,7 @@ def frequencies_update(
     enm : ENM
         Elastic network model.
     atom_i, atom_j : int
-        Atom index with ``atom_i != atom_j``
+        Atom indices with ``atom_i != atom_j``
     delta : bool or int or float
         A bool value gets interpreted as a turn on/off signal.
         Turning on resets the contact interaction strength to the initial value.
@@ -65,7 +65,7 @@ def frequencies_update(
     if not isinstance(enm, ENMUpdate):
         raise ValueError("Instance of ENMUpdate class expected.")
     if not enm.has_eigen:
-        raise AttributeError("The ENM's eigenvalues must be exist.")
+        raise AttributeError("The ENM's eigenvalues must exist.")
 
     eig_values, eig_vectors, eig_n_triv = enm.eigen(n_zero=True, copy=False)
     eig_vectors = eig_vectors.T
@@ -114,17 +114,17 @@ def mean_square_fluctuation_update(
         Turning on resets the contact interaction strength to the initial value.
         Turning off sets the contact interaction strength to zero.
         A scalar value changes the contact interaction strength by the given amount.
-    mode_subset : ndarray, shape=(n,) or (3n,), dtype=int, optional
-        Specifies the subset of modes considered in the MSF computation.
+    mode_subset : ndarray, shape=(k,), dtype=int, optional
+        Specifies the subset of modes considered in the computation.
         The first mode is counted as 0 in accordance with Python conventions.
-        If mode_subset is None, all modes are included.
+        If ``mode_subset`` is None, all non-trivial modes are included.
     tem : int, float, None, optional
         Temperature in Kelvin to compute the temperature scaling
         factor by multiplying with the Boltzmann constant.
-        If tem is None, no temperature scaling is conducted.
+        If ``tem`` is None, no temperature scaling is conducted.
     tem_factors : int, float, optional
         Factors included in temperature weighting
-        (with K_B as preset).
+        (with ``K_B`` as preset).
 
     Returns
     -------
@@ -185,7 +185,7 @@ def bfactor_update(
 ) -> np.ndarray:
     """
     Computes the isotropic B-factors/temperature factors/
-    Deby-Waller factors for atoms/coarse-grained nodes using
+    Debye-Waller factors for atoms/coarse-grained nodes using
     the mean-square fluctuation for a rank-one update to the model.
     These can be used to relate results obtained from ENMs
     to experimental results.
@@ -201,17 +201,17 @@ def bfactor_update(
         Turning on resets the contact interaction strength to the initial value.
         Turning off sets the contact interaction strength to zero.
         A scalar value changes the contact interaction strength by the given amount.
-    mode_subset : ndarray, shape=(n,) or (3n,), dtype=int, optional
-        Specifies the subset of modes considered in the MSF computation.
+    mode_subset : ndarray, shape=(k,), dtype=int, optional
+        Specifies the subset of modes considered in the computation.
         The first mode is counted as 0 in accordance with Python conventions.
-        If mode_subset is None, all modes are included.
+        If ``mode_subset`` is None, all non-trivial modes are included.
     tem : int, float, None, optional
         Temperature in Kelvin to compute the temperature scaling
         factor by multiplying with the Boltzmann constant.
-        If tem is None, no temperature scaling is conducted.
+        If ``tem`` is None, no temperature scaling is conducted.
     tem_factors : int, float, optional
         Factors included in temperature weighting
-        (with K_B as preset).
+        (with ``K_B`` as preset).
 
     Returns
     -------
@@ -259,7 +259,7 @@ def dcc_update(
     Parameters
     ----------
     enm : ENM
-        Elastic network model; an instance of either an GNM or ANM
+        Elastic network model; an instance of either a GNM or ANM
         object.
     atom_i, atom_j : int
         Atom indices with ``atom_i != atom_j``
@@ -268,10 +268,10 @@ def dcc_update(
         Turning on resets the contact interaction strength to the initial value.
         Turning off sets the contact interaction strength to zero.
         A scalar value changes the contact interaction strength by the given amount.
-    mode_subset : ndarray, shape=(n,) or (3n,), dtype=int, optional
-        Specifies the subset of modes considered in the MSF computation.
+    mode_subset : ndarray, shape=(k,), dtype=int, optional
+        Specifies the subset of modes considered in the computation.
         The first mode is counted as 0 in accordance with Python conventions.
-        If mode_subset is None, all modes are included.
+        If ``mode_subset`` is None, all non-trivial modes are included.
     norm : bool, optional
         Normalize the DCC using the MSFs of interacting nodes.
     tem : int, float, None, optional
@@ -307,7 +307,7 @@ def dcc_update(
 
         nDCC_{ij} = \frac{DCC_{ij}}{[DCC_{ii} DCC_{jj}]^{1/2}}
 
-    When all modes are considerered, the DCC is equal to the covariance matrix
+    When all modes are considered, the DCC is equal to the covariance matrix
     of GNMs or to the trace of all supermatrices (3x3) of the
     covariance matrix (3Nx3N) in the case of ANMs.
     Consequently, these are returned if standard parameters
@@ -372,7 +372,7 @@ def _calc_updated_eigen(
     mode_subset: np.ndarray | None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
-    Calculates the updated eigenvalues and vectors for a subset if modes.
+    Calculates the updated eigenvalues and vectors for a subset of modes.
 
     The ENM attributes do not get changed.
 
@@ -393,9 +393,9 @@ def _calc_updated_eigen(
 
     Returns
     -------
-    eig_values : ndarray, shape=(n, n), dtype=float
-        The updated subset of eigenvalues
-    eig_values : ndarray, shape=(n, n), dtype=float
+    eig_values : ndarray, shape=(k,), dtype=float
+        The updated subset of eigenvalues.
+    eig_vectors : ndarray, shape=(k, n), dtype=float
         The updated subset of corresponding eigenvectors.
     """
     eig_values, eig_vectors, n_triv = enm.eigen(n_zero=True)

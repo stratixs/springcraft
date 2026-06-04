@@ -61,7 +61,7 @@ class ANM(ENMUpdate):
 
             \\text{Cov}_\\text{true} = k_B T \\text{Cov}
 
-        with Boltzman constant :math:`k_B` and absolut temperature
+        with Boltzmann constant :math:`k_B` and absolute temperature
         :math:`[T] = K` in Kelvin.
 
         This is not a copy: Create a copy before modifying this matrix.
@@ -275,7 +275,7 @@ class ANM(ENMUpdate):
             :meth:`eigen()`:
             Increasing indices refer to oscillations with increasing
             frequency.
-            The first 6 modes represent tigid body movements
+            The first 6 modes represent rigid body movements
             (rotations and translations).
         amplitude : int
             The oscillation amplitude is scaled so that the maximum

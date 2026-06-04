@@ -1,5 +1,5 @@
 """
-This module contains the :class:`ENM` class. An abstract base class for molecular dynamics calculations Models.
+This module contains the :class:`ENM` class. An abstract base class for Elastic Network Models.
 """
 
 __name__ = "springcraft"
@@ -59,7 +59,7 @@ class ENM(ABC):
 
             \\text{Cov}_\\text{true} = k_B T \\text{Cov}
 
-        with Boltzman constant :math:`k_B` and absolut temperature
+        with Boltzmann constant :math:`k_B` and absolute temperature
         :math:`[T] = K` in Kelvin.
 
         This is not a copy: Create a copy before modifying this matrix.
@@ -186,30 +186,32 @@ class ENM(ABC):
         self, n_zero=False, copy=True
     ) -> Union[tuple[np.ndarray, np.ndarray], tuple[np.ndarray, np.ndarray, int]]:
         """
-        Compute or fetch the Eigenvalues and Eigenvectors of the
-        *interaction* matrix.
+        Compute or fetch the eigenvalues and eigenvectors of the
+        interaction matrix.
 
-        The laplacian `interaction` matrix is guaranteed to be
+        The Laplacian interaction matrix is guaranteed to be
         rank-deficient. Numerical inconsistencies occur during
-        eigenvalue calculation. All quasi-zero eigenvalues are set to 0.
+        eigenvalue calculation. All near-zero eigenvalues are set to 0.
 
         Parameters
         ----------
-        n_zero : bool, optional, default=False
-            Whether to return number of zero eigenvalues.
+        n_zero : bool, optional
+            Whether to return the number of zero eigenvalues.
             These are the first eigenvalues.
-        copy : bool, optional, default=True
+            The default is ``False``.
+        copy : bool, optional
             Whether to return the eigenvalues and eigenvectors as copies.
             If you choose not to return copies a modification to these
-            values can reflect in incorrect behaviour of the class.
+            values can result in incorrect behaviour of the class.
+            The default is ``True``.
 
         Returns
         -------
         eig_values : ndarray, shape=(k,), dtype=float
             Eigenvalues of the matrix in ascending order.
-        eig_vectors : ndarray, shape=(k,n), dtype=float
-            Eigenvectors of the matrix.
-            ``eig_values[i]`` corresponds to ``eigenvectors[i]``.
+        eig_vectors : ndarray, shape=(k, n), dtype=float
+            Eigenvectors of the matrix, one per row.
+            ``eig_values[i]`` corresponds to ``eig_vectors[i]``.
         eigen_n_zero : int, optional
             The number of the (first) zero eigenvalues.
             Only returned if ``n_zero`` is set.
@@ -287,27 +289,25 @@ class ENM(ABC):
     ) -> np.ndarray:
         """
         Compute the *mean square fluctuation* for the atoms according to
-        the GNM.
+        the ENM.
         This is equal to the diagonal of the covariance matrix, if all
-        k-1 non-trivial modes are considered (subset=None, default).
+        non-trivial modes are considered (``mode_subset=None``, default).
 
         Parameters
         ----------
-        mode_subset : ndarray, shape=(n,), dtype=int, optional
-            Specifies the subset of modes considered in the MSF
-            computation.
+        mode_subset : ndarray, shape=(k,), dtype=int, optional
+            Specifies the subset of modes considered in the computation.
             Only non-trivial modes can be selected.
             The first mode is counted as 0 in accordance with
             Python conventions.
-            If mode_subset is None, all modes except the first
-            trivial modes are included.
+            If ``mode_subset`` is None, all non-trivial modes are included.
         tem : int, float, None, optional
             Temperature in Kelvin to compute the temperature scaling
             factor by multiplying with the Boltzmann constant.
-            If tem is None, no temperature scaling is conducted.
+            If ``tem`` is None, no temperature scaling is conducted.
         tem_factors : int, float, optional
             Factors included in temperature weighting
-            (with K_B as preset).
+            (with ``K_B`` as preset).
 
         Returns
         -------
@@ -323,8 +323,8 @@ class ENM(ABC):
         tem_factors: float = K_B,
     ) -> np.ndarray:
         """
-        Computes the isotropic B-factors/temperature factors/
-        Deby-Waller factors for atoms/coarse-grained nodes using
+        Compute isotropic B-factors/temperature factors/
+        Debye-Waller factors for atoms/coarse-grained nodes using
         the mean-square fluctuation.
 
         These can be used to relate results obtained from ENMs
@@ -332,21 +332,20 @@ class ENM(ABC):
 
         Parameters
         ----------
-        mode_subset : ndarray, shape=(n,), dtype=int, optional
-            Specifies the subset of modes considered in the MSF
-            computation.
+        mode_subset : ndarray, shape=(k,), dtype=int, optional
+            Specifies the subset of modes considered in the computation.
             Only non-trivial modes can be selected.
             The first mode is counted as 0 in accordance with
             Python conventions.
-            If mode_subset is None, all modes except the first
-            trivial modes are included.
+            If ``mode_subset`` is None, all non-trivial modes are included.
         tem : int, float, None, optional
             Temperature in Kelvin to compute the temperature scaling
             factor by multiplying with the Boltzmann constant.
-            If tem is None, no temperature scaling is conducted.
+            If ``tem`` is None, no temperature scaling is conducted.
         tem_factors : int, float, optional
             Factors included in temperature weighting
-            (with K_B as preset).
+            (with ``K_B`` as preset).
+
         Returns
         -------
         bfac_values : ndarray, shape=(n,), dtype=float
@@ -362,8 +361,8 @@ class ENM(ABC):
         tem_factors: float = K_B,
     ) -> np.ndarray:
         r"""
-        Computes the normalized *dynamic cross-correlation* between
-        nodes of the GNM.
+        Compute the normalized *dynamic cross-correlation* between
+        nodes of the ENM.
 
         The DCC is a measure for the correlation in fluctuations
         exhibited by a given pair of nodes. If normalized, pairs with
@@ -377,20 +376,18 @@ class ENM(ABC):
 
         Parameters
         ----------
-        mode_subset : ndarray, shape=(n,), dtype=int, optional
-            Specifies the subset of modes considered in the MSF
-            computation.
+        mode_subset : ndarray, shape=(k,), dtype=int, optional
+            Specifies the subset of modes considered in the computation.
             Only non-trivial modes can be selected.
             The first mode is counted as 0 in accordance with
             Python conventions.
-            If mode_subset is None, all modes except the first
-            trivial mode (0) are included.
+            If ``mode_subset`` is None, all non-trivial modes are included.
         norm : bool, optional
             Normalize the DCC using the MSFs of interacting nodes.
         tem : int, float, None, optional
             Temperature in Kelvin to compute the temperature scaling
             factor by multiplying with the Boltzmann constant.
-            If tem is None, no temperature scaling is conducted.
+            If ``tem`` is None, no temperature scaling is conducted.
         tem_factors : int, float, optional
             Factors included in temperature weighting
             (with :math:`k_B` as preset).
@@ -408,9 +405,9 @@ class ENM(ABC):
 
             DCC_{ij} = \frac{3 k_B T}{\gamma} \sum_k^L \left[ \frac{\vec{u}_k \cdot \vec{u}_k^T}{\lambda_k} \right]_{ij}
 
-        with :math:`\lambda` and :math:`\vec{u}` as
-        Eigenvalues and Eigenvectors corresponding to mode :math:`k` of
-        the modeset :math:`L`.
+        with :math:`\lambda` and :math:`\vec{u}` as the
+        eigenvalues and eigenvectors corresponding to mode :math:`k` of
+        the mode set :math:`L`.
 
         DCCs can be normalized to MSFs exhibited by two compared nodes
         following:

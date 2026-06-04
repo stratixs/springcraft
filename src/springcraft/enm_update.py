@@ -33,7 +33,7 @@ class ENMUpdate(ENM):
 
         If the `covariance` matrix exists, a low complexity algorithm is
         used to update the covariance matrix according to the small
-        pertubation introduced to `interaction` matrix.
+        perturbation introduced to the `interaction` matrix.
 
         The `interaction` matrix needs to be present.
         The `adjacency` matrix needs to be present, if you do not change
@@ -44,7 +44,7 @@ class ENMUpdate(ENM):
         Parameters
         ----------
         atom_i, atom_j : int
-            Index with ``atom_i != atom_j``
+            Atom indices with ``atom_i != atom_j``
         delta : bool | int | float
             A bool value gets interpreted as a turn on/off signal.
             Turning on resets the contact interaction strength to the initial value.
@@ -67,14 +67,14 @@ class ENMUpdate(ENM):
 
         self._modify_interactions(slice_i, slice_j, slice_t, delta)
 
-        # invalidate deoendant values
+        # invalidate dependent values
         self._eig_values = None
         self._eig_vectors = None
 
     @abstractmethod
     def modify_atom(self, atom_i: int, new_atom: bool | struc.Atom):
         """
-        Modifies the force constants in the `interation` matrix between the
+        Modifies the force constants in the `interaction` matrix between the
         `atom_i` and all its adjacent atoms. An atom is defined as adjacent
         if it is within cutoff distance. An atom can be either be
         - turned off (interactions to all atoms are turned off),
@@ -85,7 +85,7 @@ class ENMUpdate(ENM):
 
         If the `covariance` matrix exists, a low complexity algorithm is
         used to update the covariance matrix according to the small
-        pertubation introduced to the `interaction` matrix.
+        perturbation introduced to the `interaction` matrix.
 
         The `interaction` and the `adjacency` matrix need to be present.
         The `adjacency` matrix is present, if neither the `interaction`
@@ -98,11 +98,8 @@ class ENMUpdate(ENM):
         new_atom : bool or Atom
             A bool gets interpreted as a turn on/off signal.
             An Atom may result in a change to the `ForceField`.
-        skip_checks : bool, optional
-            Whether to skip argument checks, by default False
-
-        Raises (if checks are enabled)
-        ------
+        Raises
+        -----
         AttributeError
             If the `interaction` matrix does not exist.
         IndexError
@@ -139,7 +136,7 @@ class ENMUpdate(ENM):
         Parameters
         ----------
         atom_i, atom_j : int
-            Atom indices with `atom_i != atom_j`
+            Atom indices with ``atom_i != atom_j``
         delta : bool or int or float
             A bool value gets interpreted as a turn on/off signal.
             Turning on resets the contact interaction strength to the initial value.
@@ -206,8 +203,8 @@ class ENMUpdate(ENM):
         delta : float
             Permutation factor
 
-        Note
-        ----
+        Notes
+        -----
         This method does not perform any input checking.
         """
         if slice_t is None:
@@ -260,8 +257,8 @@ class ENMUpdate(ENM):
         update : Callable
             One-rank permutation to the covariance matrix
 
-        Note
-        ----
+        Notes
+        -----
         This method does not perform any input checking.
         """
         if slice_t is None:
@@ -313,8 +310,8 @@ class ENMUpdate(ENM):
         delta: float,
     ):
         """
-        Application of the `covariance_update` method to this
-        model's covariance matrix.
+        Application of the `interactions_update` method to this
+        model's interaction matrix.
         """
         self.interactions_update(
             self._interactions,
@@ -332,8 +329,8 @@ class ENMUpdate(ENM):
         delta: float,
     ):
         """
-        Application of the `interactions_update` method to this
-        model's interaction matrix.
+        Application of the `covariance_update` method to this
+        model's covariance matrix.
         """
         self.covariance_update(
             self._interactions,
@@ -367,7 +364,7 @@ class ENMUpdate(ENM):
         Parameters
         ----------
         atom_i, atom_j : int
-            Atom index with ``atom_i != atom_j``
+            Atom indices with ``atom_i != atom_j``
         delta : bool or int or float
             A bool value gets interpreted as a turn on/off signal.
             Turning on resets the contact interaction strength to the initial value.
@@ -383,7 +380,7 @@ class ENMUpdate(ENM):
         Raises
         ------
         AttributeError
-            If the ENM's eigenvalues and -vectors do not exist.
+            If the ENM's eigenvalues and eigenvectors do not exist.
         """
         return nma_update.frequencies_update(self, atom_i, atom_j, delta)
 
@@ -409,13 +406,17 @@ class ENMUpdate(ENM):
             Turning on resets the contact interaction strength to the initial value.
             Turning off sets the contact interaction strength to zero.
             A scalar value changes the contact interaction strength by the given amount.
+        mode_subset : ndarray, shape=(k,), dtype=int, optional
+            Specifies the subset of modes considered in the computation.
+            The first mode is counted as 0 in accordance with Python conventions.
+            If ``mode_subset`` is None, all non-trivial modes are included.
         tem : int, float, None, optional
             Temperature in Kelvin to compute the temperature scaling
             factor by multiplying with the Boltzmann constant.
-            If tem is None, no temperature scaling is conducted.
+            If ``tem`` is None, no temperature scaling is conducted.
         tem_factors : int, float, optional
             Factors included in temperature weighting
-            (with K_B as preset).
+            (with ``K_B`` as preset).
 
         Returns
         -------
@@ -446,15 +447,13 @@ class ENMUpdate(ENM):
     ) -> np.ndarray:
         """
         Computes the isotropic B-factors/temperature factors/
-        Deby-Waller factors for atoms/coarse-grained nodes using
+        Debye-Waller factors for atoms/coarse-grained nodes using
         the mean-square fluctuation for a rank-one update to the model.
         These can be used to relate results obtained from ENMs
         to experimental results.
 
         Parameters
         ----------
-        enm : ENM
-            Elastic network model.
         atom_i, atom_j : int
             Atom indices with ``atom_i != atom_j``
         delta : bool or int or float
@@ -462,13 +461,17 @@ class ENMUpdate(ENM):
             Turning on resets the contact interaction strength to the initial value.
             Turning off sets the contact interaction strength to zero.
             A scalar value changes the contact interaction strength by the given amount.
+        mode_subset : ndarray, shape=(k,), dtype=int, optional
+            Specifies the subset of modes considered in the computation.
+            The first mode is counted as 0 in accordance with Python conventions.
+            If ``mode_subset`` is None, all non-trivial modes are included.
         tem : int, float, None, optional
             Temperature in Kelvin to compute the temperature scaling
             factor by multiplying with the Boltzmann constant.
-            If tem is None, no temperature scaling is conducted.
+            If ``tem`` is None, no temperature scaling is conducted.
         tem_factors : int, float, optional
             Factors included in temperature weighting
-            (with K_B as preset).
+            (with ``K_B`` as preset).
 
         Returns
         -------
@@ -513,10 +516,10 @@ class ENMUpdate(ENM):
             Turning on resets the contact interaction strength to the initial value.
             Turning off sets the contact interaction strength to zero.
             A scalar value changes the contact interaction strength by the given amount.
-        mode_subset : ndarray, shape=(n,) or (3n,), dtype=int, optional
-            Specifies the subset of modes considered in the MSF computation.
+        mode_subset : ndarray, shape=(k,), dtype=int, optional
+            Specifies the subset of modes considered in the computation.
             The first mode is counted as 0 in accordance with Python conventions.
-            If mode_subset is None, all modes are included.
+            If ``mode_subset`` is None, all non-trivial modes are included.
         norm : bool, optional
             Normalize the DCC using the MSFs of interacting nodes.
         tem : int, float, None, optional
@@ -552,11 +555,11 @@ class ENMUpdate(ENM):
 
             nDCC_{ij} = \frac{DCC_{ij}}{[DCC_{ii} DCC_{jj}]^{1/2}}
 
-        When all modes are considerered, the DCC is equal to the covariance matrix
+        When all modes are considered, the DCC is equal to the covariance matrix
         of GNMs or to the trace of all supermatrices (3x3) of the
         covariance matrix (3Nx3N) in the case of ANMs.
         Consequently, these are returned if standard parameters
-        for 'mode_subset' and 'memory_efficient' are passed to the function.
+        for ``mode_subset`` and ``memory_efficient`` are passed to the function.
         """
         return nma_update.dcc_update(
             self, atom_i, atom_j, delta, mode_subset, norm, tem, tem_factors

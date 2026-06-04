@@ -83,7 +83,7 @@ class ForceField(metaclass=abc.ABCMeta):
             The indices to the first and second atoms in each
             interacting atom pair.
         sq_distance : ndarray, shape=(n,), dtype=float
-            The distance between the atoms indicated by `atom_i` and
+            The squared distance between the atoms indicated by `atom_i` and
             `atom_j`.
 
         Returns
@@ -107,24 +107,22 @@ class ForceField(metaclass=abc.ABCMeta):
 
     def update(self, atom_i: int, new_atom: struc.Atom) -> bool:
         """
-        Allows a small pertubation to the `ForceField` if the `ForceField`
-        depends on the `Atom` configuration in the model.
+        Allows a small perturbation to the `ForceField` if the `ForceField`
+        depends on the atom configuration in the model.
 
         Override when inheriting or leave default when the `ForceField`
-        does not depend on the a actual molecule configuration.
+        does not depend on the actual molecule configuration.
 
         Parameters
         ----------
         atom_i : int
-            The atom to modify
-        Atom : Atom
-            The changed atom
-        skip_checks : bool, optional
-            Whether to skip argument checks, by default False
+            The atom to modify.
+        new_atom : Atom
+            The new atom that replaces the atom at ``atom_i``.
 
         Returns
         -------
-        bool
+        updated : bool
             Whether the `ForceField` was updated.
         """
         return False
@@ -655,7 +653,7 @@ class TabulatedForceField(ForceField):
         """
         if atom_i < 0 or atom_i >= self._natoms:
             raise IndexError(
-                f"Atom i {atom_i} out of boundsfor a structure of length {self._natoms}"
+                f"Atom i {atom_i} is out of bounds for a structure of length {self._natoms}"
             )
 
         matrix_index = AA_TO_INDEX[new_atom.res_name]
@@ -710,7 +708,7 @@ class TabulatedForceField(ForceField):
     def s_enm_10(atoms: struc.AtomArray) -> TabulatedForceField:
         r"""
         The sENM10 forcefield by Dehouck and Mikhailov was parametrized
-        by statisctical analysis of a NMR conformational
+        by statistical analysis of a NMR conformational
         ensemble dataset.
         Non-bonded interactions between amino acid species are
         parametrized in an amino acid type-specific manner, with a
@@ -746,7 +744,7 @@ class TabulatedForceField(ForceField):
     def s_enm_13(atoms: struc.AtomArray) -> TabulatedForceField:
         r"""
         The sENM13 forcefield by Dehouck and Mikhailov was parametrized
-        by statisctical analysis of a NMR conformational ensemble dataset.
+        by statistical analysis of a NMR conformational ensemble dataset.
         Non-bonded interactions between amino acid species are
         parametrized in an amino acid type-specific manner, with a
         cutoff distance of 1.3 nm.
@@ -888,7 +886,7 @@ class TabulatedForceField(ForceField):
             Must contain only ``CA`` atoms and only canonic amino acids.
             ``CA`` atoms with the same chain ID and adjacent residue IDs
             are treated as bonded.
-        nonbonded_mean  :  Booleam  (optional)
+        nonbonded_mean : bool, optional
             If True, the average of nonbonded interaction tables is
             computed and used for nonbonded interactions, which yields
             an homogenous, amino acid-species ignorant parametrization
@@ -955,7 +953,7 @@ class TabulatedForceField(ForceField):
             Must contain only ``CA`` atoms and only canonic amino acids.
             ``CA`` atoms with the same chain ID and adjacent residue IDs
             are treated as bonded.
-        nonbonded_mean  :  Booleam  (optional)
+        nonbonded_mean : bool, optional
             If True, the average of nonbonded interaction tables is
             computed and used for nonbonded interactions, which yields
             an homogenous, amino acid-species ignorant parametrization
@@ -1013,7 +1011,7 @@ class TabulatedForceField(ForceField):
             Must contain only ``CA`` atoms and only canonic amino acids.
             ``CA`` atoms with the same chain ID and adjacent residue IDs
             are treated as bonded.
-        nonbonded_mean  :  Booleam  (optional)
+        nonbonded_mean : bool, optional
             If True, the average of nonbonded interaction tables is
             computed and used for nonbonded interactions, which yields
             an homogenous, amino acid-species ignorant parametrization
