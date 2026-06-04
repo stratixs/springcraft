@@ -350,3 +350,114 @@ def test_bfactor_subset_chng():
     ref_anm.hessian
     ref_bfactor = ref_anm.bfactor(subset)
     assert np.allclose(bfactor, ref_bfactor)
+
+
+def test_dcc_chng():
+    ca = load_protein_structure("1l2y")
+    ff = springcraft.InvariantForceField(7.0)
+
+    # no rank change
+    test_anm = springcraft.ANM(ca, ff)
+    test_anm.hessian
+    test_anm.covariance
+    dcc = test_anm.dcc_chng(6, 8, 2)
+
+    ref_ff = ModifiedForceField(ff, len(ca), [6], [8], [2])
+    ref_anm = springcraft.ANM(ca, ref_ff)
+    ref_anm.hessian
+    ref_dcc = ref_anm.dcc()
+    assert np.allclose(dcc, ref_dcc)
+
+    # rank decrease
+    for i in [5, 6, 7, 9, 10, 13]:
+        test_anm.modify_contact(i, 8, False)
+    dcc = test_anm.dcc_chng(4, 8, False, norm=False)
+
+    ref_ff = ModifiedForceField(
+        ff,
+        len(ca),
+        [4, 5, 6, 7, 9, 10, 13],
+        [8, 8, 8, 8, 8, 8, 8],
+        [-1, -1, -1, -1, -1, -1, -1],
+    )
+    ref_anm = springcraft.ANM(ca, ref_ff)
+    ref_anm.hessian
+    ref_dcc = ref_anm.dcc(norm=False)
+    assert np.allclose(dcc, ref_dcc)
+
+    # rank increase
+    test_anm.modify_contact(4, 8, False)
+    dcc = test_anm.dcc_chng(4, 8, True)
+
+    ref_ff = ModifiedForceField(
+        ff,
+        len(ca),
+        [5, 6, 7, 9, 10, 13],
+        [8, 8, 8, 8, 8, 8],
+        [-1, -1, -1, -1, -1, -1],
+    )
+    ref_anm = springcraft.ANM(ca, ref_ff)
+    ref_anm.hessian
+    ref_dcc = ref_anm.dcc()
+    assert np.allclose(dcc, ref_dcc)
+
+    # temp scaling
+    dcc = test_anm.dcc_chng(4, 8, True, tem=300)
+    ref_dcc = ref_anm.dcc(tem=300)
+    assert np.allclose(dcc, ref_dcc)
+
+
+def test_dcc_subset_chng():
+    ca = load_protein_structure("1l2y")
+    ff = springcraft.InvariantForceField(7.0)
+
+    # no rank change
+    subset = np.array([11, 43, 58])
+    test_anm = springcraft.ANM(ca, ff)
+    test_anm.hessian
+    test_anm.covariance
+    dcc = test_anm.dcc_chng(6, 8, 2, subset)
+
+    ref_ff = ModifiedForceField(ff, len(ca), [6], [8], [2])
+    ref_anm = springcraft.ANM(ca, ref_ff)
+    ref_anm.hessian
+    ref_dcc = ref_anm.dcc(subset)
+    assert np.allclose(dcc, ref_dcc)
+
+    # rank decrease
+    for i in [5, 6, 7, 9, 10, 13]:
+        test_anm.modify_contact(i, 8, False)
+    dcc = test_anm.dcc_chng(4, 8, False, subset, norm=False)
+
+    ref_ff = ModifiedForceField(
+        ff,
+        len(ca),
+        [4, 5, 6, 7, 9, 10, 13],
+        [8, 8, 8, 8, 8, 8, 8],
+        [-1, -1, -1, -1, -1, -1, -1],
+    )
+    ref_anm = springcraft.ANM(ca, ref_ff)
+    ref_anm.hessian
+    ref_dcc = ref_anm.dcc(subset, norm=False)
+    assert np.allclose(dcc, ref_dcc)
+
+    # rank increase
+    test_anm.modify_contact(4, 8, False)
+    dcc = test_anm.dcc_chng(4, 8, True, subset)
+
+    ref_ff = ModifiedForceField(
+        ff,
+        len(ca),
+        [5, 6, 7, 9, 10, 13],
+        [8, 8, 8, 8, 8, 8],
+        [-1, -1, -1, -1, -1, -1],
+    )
+    ref_anm = springcraft.ANM(ca, ref_ff)
+    ref_anm.hessian
+    ref_dcc = ref_anm.dcc(subset)
+    assert np.allclose(dcc, ref_dcc)
+
+    # temp scaling
+    dcc = test_anm.dcc_chng(4, 8, True, subset, tem=300)
+    ref_dcc = ref_anm.dcc(subset, tem=300)
+    assert np.allclose(dcc, ref_dcc)

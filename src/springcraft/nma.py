@@ -190,11 +190,6 @@ def bfactor(
     bfac_values : ndarray, shape=(n,), dtype=float
         B-factors of C-alpha atoms.
     """
-    from springcraft.enm import ENM
-
-    if not isinstance(enm, ENM):
-        raise ValueError("Instance of ENM class expected.")
-
     msqf = mean_square_fluctuation(enm, mode_subset, tem, tem_factors)
     b_factors = ((8 * np.pi**2) * msqf) / 3
 
@@ -266,68 +261,40 @@ def dcc(
     Consequently, these are returned if standard parameters
     for 'mode_subset' and 'memory_efficient' are passed to the function.
     """
+    from springcraft.enm import ENM
 
-    from springcraft.anm import ANM
-    from springcraft.gnm import GNM
+    if not isinstance(enm, ENM):
+        raise ValueError("Instance of ENM class expected.")
 
-    eig_values, eig_vectors = enm.eigen()
-    n_nodes = len(enm._coord)
-
-    if isinstance(enm, ANM):
-        is_gnm = False
-        ntriv_modes = 6
-        num_dim = 3
-    elif isinstance(enm, GNM):
-        is_gnm = True
-        ntriv_modes = 1
-        num_dim = 1
-    else:
-        raise ValueError("Instance of GNM/ANM class expected.")
-
-    # Choose modes included in computation; raise error, if trivial
-    # modes are included
-    all_modes = False
     if mode_subset is None:
-        all_modes = True
-        mode_subset = np.arange(ntriv_modes, len(eig_values))
-    elif any(mode_subset <= (ntriv_modes - 1)):
-        raise ValueError(
-            "Trivial modes are included in the current selection."
-            " Please check your input."
+        dcc = (
+            enm.covariance.reshape(enm._natoms, enm.dof, enm._natoms, enm.dof)
+            .swapaxes(1, 2)
+            .trace(axis1=2, axis2=3)
         )
-
-    ## Shortcut if all modes are included in computations
-    # GNM -> DCC corresponds to inverted Kirchhoff
-    if is_gnm and all_modes:
-        dcc = enm.covariance
-    # ANM -> ...to the trace of the inverted Hessian's 3x3 superelements
-    elif all_modes:
-        # 3N x 3N -> N x 3 x N x 3 -> N x N x 3 x 3
-        cov = enm.covariance
-        reshaped = cov.reshape(cov.shape[0] // 3, 3, cov.shape[0] // 3, 3).swapaxes(
-            1, 2
-        )
-        # Accept array of any dimension
-        # -> Sum over diagonals in last two dims
-        # -> Return any shape (in this case NxN)
-        dcc = np.einsum("...ii->...", reshaped)
-    # Slower method for custom mode range
     else:
+        eig_values, eig_vectors, n_triv = enm.eigen(n_zero=True)
+
+        # raise error, if trivialmodes are included
+        if np.any(mode_subset < n_triv):
+            raise ValueError(
+                "Trivial modes are included in the current selection. "
+                "Please check your input."
+            )
+
         eig_values = eig_values[mode_subset]
         eig_vectors = eig_vectors[mode_subset]
 
         # Reshape array of eigenvectors
         # (k,3n) -> (k,n,3) for ANMs; (k,n) -> (k,n,1) for GNMs
-        modes_reshaped = np.reshape(eig_vectors, (len(mode_subset), -1, num_dim))
-        dcc = np.zeros((n_nodes, n_nodes))
-        for ev, evec in zip(eig_values, modes_reshaped):
-            dcc += (evec @ evec.T) / ev
+        eig_vectors = np.reshape(eig_vectors, (len(mode_subset), -1, enm.dof))
+        eig_vectors_scal = eig_vectors / eig_values[:, None, None]
+        dcc = np.einsum("knd,kmd->nm", eig_vectors, eig_vectors_scal)
 
     # Compute the normalized DCC
     if norm:
-        dcc_ii = np.diagonal(dcc)
-        dcc_ii = np.reshape(dcc_ii, (1, len(dcc)))
-        dcc = dcc / np.sqrt(dcc_ii * dcc_ii.T)
+        dcc_ii = np.sqrt(np.diagonal(dcc))
+        dcc /= np.outer(dcc_ii, dcc_ii)
 
     # Temperature weighting
     if tem is not None:

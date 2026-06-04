@@ -489,3 +489,77 @@ class ENMPert(ENM):
         return nma_chng.bfactor_chng(
             self, atom_i, atom_j, delta, mode_subset, tem, tem_factors
         )
+
+    def dcc_chng(
+        self,
+        atom_i: int,
+        atom_j: int,
+        delta: float | int | bool,
+        mode_subset: np.ndarray | None = None,
+        norm: bool = True,
+        tem: int | float | None = None,
+        tem_factors: int | float = K_B,
+    ) -> np.ndarray:
+        r"""
+        Computes the normalized *dynamic cross-correlation* between
+        nodes of the ENM for a rank-one updated model.
+
+        The method does not change any attributes of the model class.
+
+        Parameters
+        ----------
+        atom_i, atom_j : int
+            Atom indices with ``atom_i != atom_j``
+        delta : bool or int or float
+            A bool value gets interpreted as a turn on/off signal.
+            Turning on resets the contact interaction strength to the initial value.
+            Turning off sets the contact interaction strength to zero.
+            A scalar value changes the contact interaction strength by the given amount.
+        mode_subset : ndarray, shape=(n,) or (3n,), dtype=int, optional
+            Specifies the subset of modes considered in the MSF computation.
+            The first mode is counted as 0 in accordance with Python conventions.
+            If mode_subset is None, all modes are included.
+        norm : bool, optional
+            Normalize the DCC using the MSFs of interacting nodes.
+        tem : int, float, None, optional
+            Temperature in Kelvin to compute the temperature scaling
+            factor by multiplying with the Boltzmann constant.
+            If tem is None, no temperature scaling is conducted.
+        tem_factors : int, float, optional
+            Factors included in temperature weighting
+            (with :math:`k_B` as preset).
+
+        Returns
+        -------
+        dcc : ndarray, shape=(n, n), dtype=float
+            DCC values for updated ENM nodes as NxN matrix.
+
+        Notes
+        -----
+
+        The DCC for a nodepair :math:`ij` is computed as:
+
+        .. math::
+
+            DCC_{ij} = \frac{3 k_B T}{\gamma} \sum_k^L \left[ \frac{\vec{u}_k \cdot \vec{u}_k^T}{\lambda_k} \right]_{ij}
+
+        with :math:`\lambda` and :math:`\vec{u}` as
+        Eigenvalues and Eigenvectors corresponding to mode :math:`k` of
+        the modeset :math:`L`.
+
+        DCCs can be normalized to MSFs exhibited by two compared nodes
+        following:
+
+        .. math::
+
+            nDCC_{ij} = \frac{DCC_{ij}}{[DCC_{ii} DCC_{jj}]^{1/2}}
+
+        When all modes are considerered, the DCC is equal to the covariance matrix
+        of GNMs or to the trace of all supermatrices (3x3) of the
+        covariance matrix (3Nx3N) in the case of ANMs.
+        Consequently, these are returned if standard parameters
+        for 'mode_subset' and 'memory_efficient' are passed to the function.
+        """
+        return nma_chng.dcc_chng(
+            self, atom_i, atom_j, delta, mode_subset, norm, tem, tem_factors
+        )

@@ -8,9 +8,12 @@ __author__ = "Raphael Sutter"
 __all__ = ["frequencies_chng", "mean_square_fluctuation_chng", "bfactor_chng"]
 
 import numpy as np
+from scipy.linalg import blas
 
 from springcraft.nma import K_B
 from springcraft.utils import eigen_chng, eigenvalue_chng
+
+ger = blas.get_blas_funcs("ger", dtype=np.float64)
 
 
 def frequencies_chng(
@@ -142,45 +145,17 @@ def mean_square_fluctuation_chng(
             nonlocal msqf_chng
             msqf_chng += alpha * x * y
 
-        slice_i, slice_j, slice_t, delta = enm.prepare_one_rank_update(
-            atom_i, atom_j, delta
-        )
         enm.covariance_rank_one_update(
             enm._interactions,
             enm.covariance,
-            slice_i,
-            slice_j,
-            slice_t,
-            delta,
+            *enm.prepare_one_rank_update(atom_i, atom_j, delta),
             msqf_update_fnc,
         )
         msqf_chng = msqf_chng.reshape((-1, enm.dof)).sum(axis=1)
     else:
-        eig_values, eig_vectors, n_triv = enm.eigen(n_zero=True)
-        eig_vectors = eig_vectors.T
-
-        # Choose modes included in computation; raise error, if trivial
-        # modes are included
-        if mode_subset is None:
-            mode_subset = np.arange(n_triv, len(eig_values))
-        elif np.any(mode_subset < n_triv):
-            raise ValueError(
-                "Trivial modes are included in the current selection. "
-                "Please check your input."
-            )
-
-        slice_i, slice_j, slice_t, delta = enm.prepare_one_rank_update(
-            atom_i, atom_j, delta
+        eig_values_pert, eig_vectors_pert = _calc_updated_eigen(
+            enm, atom_i, atom_j, delta, mode_subset
         )
-        z = slice_t @ eig_vectors[slice_i] - slice_t @ eig_vectors[slice_j]
-
-        rho = np.asarray(delta).item()
-        mode_subset = mode_subset.astype(np.intc)
-        eig_values_pert, eig_vectors_delta = eigen_chng(eig_values, z, rho, mode_subset)
-
-        w = z / eig_vectors_delta
-        w = w / np.linalg.norm(w, axis=1).reshape(-1, 1)
-        eig_vectors_pert = w @ eig_vectors.T
 
         msqf_chng = (eig_vectors_pert.T**2) @ (1 / eig_values_pert)
         msqf_chng = msqf_chng.reshape(-1, enm.dof).sum(axis=1)
@@ -256,3 +231,186 @@ def bfactor_chng(
     b_factors_chng = ((8 * np.pi**2) * b_factors_chng) / 3
 
     return b_factors_chng
+
+
+def dcc_chng(
+    enm,
+    atom_i: int,
+    atom_j: int,
+    delta: float | int | bool,
+    mode_subset: np.ndarray | None = None,
+    norm: bool = True,
+    tem: int | float | None = None,
+    tem_factors: int | float = K_B,
+) -> np.ndarray:
+    r"""
+    Computes the normalized *dynamic cross-correlation* between
+    nodes of the ENM for a rank-one updated model.
+
+    The method does not change any attributes of the model class.
+
+    Parameters
+    ----------
+    enm : ENM
+        Elastic network model; an instance of either an GNM or ANM
+        object.
+    atom_i, atom_j : int
+        Atom indices with ``atom_i != atom_j``
+    delta : bool or int or float
+        A bool value gets interpreted as a turn on/off signal.
+        Turning on resets the contact interaction strength to the initial value.
+        Turning off sets the contact interaction strength to zero.
+        A scalar value changes the contact interaction strength by the given amount.
+    mode_subset : ndarray, shape=(n,) or (3n,), dtype=int, optional
+        Specifies the subset of modes considered in the MSF computation.
+        The first mode is counted as 0 in accordance with Python conventions.
+        If mode_subset is None, all modes are included.
+    norm : bool, optional
+        Normalize the DCC using the MSFs of interacting nodes.
+    tem : int, float, None, optional
+        Temperature in Kelvin to compute the temperature scaling
+        factor by multiplying with the Boltzmann constant.
+        If tem is None, no temperature scaling is conducted.
+    tem_factors : int, float, optional
+        Factors included in temperature weighting
+        (with :math:`k_B` as preset).
+
+    Returns
+    -------
+    dcc : ndarray, shape=(n, n), dtype=float
+        DCC values for updated ENM nodes as NxN matrix.
+
+    Notes
+    -----
+
+    The DCC for a nodepair :math:`ij` is computed as:
+
+    .. math::
+
+        DCC_{ij} = \frac{3 k_B T}{\gamma} \sum_k^L \left[ \frac{\vec{u}_k \cdot \vec{u}_k^T}{\lambda_k} \right]_{ij}
+
+    with :math:`\lambda` and :math:`\vec{u}` as
+    Eigenvalues and Eigenvectors corresponding to mode :math:`k` of
+    the modeset :math:`L`.
+
+    DCCs can be normalized to MSFs exhibited by two compared nodes
+    following:
+
+    .. math::
+
+        nDCC_{ij} = \frac{DCC_{ij}}{[DCC_{ii} DCC_{jj}]^{1/2}}
+
+    When all modes are considerered, the DCC is equal to the covariance matrix
+    of GNMs or to the trace of all supermatrices (3x3) of the
+    covariance matrix (3Nx3N) in the case of ANMs.
+    Consequently, these are returned if standard parameters
+    for 'mode_subset' and 'memory_efficient' are passed to the function.
+    """
+    from springcraft.enm import ENM
+
+    if not isinstance(enm, ENM):
+        raise ValueError("Instance of ENM class expected.")
+
+    if mode_subset is None:
+        dcc_update = enm.covariance.copy()
+
+        def dcc_update_fnc(alpha, x, y):
+            nonlocal dcc_update
+            ger(alpha, x, y, a=dcc_update.T, overwrite_a=True)
+
+        enm.covariance_rank_one_update(
+            enm._interactions,
+            enm.covariance,
+            *enm.prepare_one_rank_update(atom_i, atom_j, delta),
+            dcc_update_fnc,
+        )
+
+        # calc mean over degrees of freedom
+        dcc_update = (
+            dcc_update.reshape(enm._natoms, enm.dof, enm._natoms, enm.dof)
+            .swapaxes(1, 2)
+            .trace(axis1=2, axis2=3)
+        )
+
+    else:
+        eig_val_update, eig_vec_update = _calc_updated_eigen(
+            enm, atom_i, atom_j, delta, mode_subset
+        )
+
+        eig_vec_update = np.reshape(eig_vec_update, (len(mode_subset), -1, enm.dof))
+        eig_vec_update_scal = eig_vec_update / eig_val_update[:, None, None]
+        dcc_update = np.einsum("knd,kmd->nm", eig_vec_update, eig_vec_update_scal)
+
+    # Compute the normalized DCC
+    if norm:
+        dcc_update_ii = np.sqrt(np.diagonal(dcc_update))
+        dcc_update /= np.outer(dcc_update_ii, dcc_update_ii)
+
+    # Temperature weighting
+    if tem is not None:
+        dcc_update = dcc_update * tem * tem_factors
+
+    return dcc_update
+
+
+def _calc_updated_eigen(
+    enm,
+    atom_i: int,
+    atom_j,
+    delta: float | int | bool,
+    mode_subset: np.ndarray | None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Calculates the updated eigenvalues and vectors for a subset if modes.
+
+    The ENM attributes do not get changed.
+
+    Parameters
+    ----------
+    enm : ENM
+        Elastic network model
+    atom_i, atom_j : int
+        Atom indices with ``atom_i != atom_j``
+    delta : bool or int or float
+        A bool value gets interpreted as a turn on/off signal.
+        Turning on resets the contact interaction strength to the initial value.
+        Turning off sets the contact interaction strength to zero.
+        A scalar value changes the contact interaction strength by the given amount.
+    mode_subset : ndarray, shape=(k,), dtype=int, optional
+        Specifies the subset of modes considered in the update.
+        The first mode is counted as 0 in accordance with Python conventions.
+
+    Returns
+    -------
+    eigen_values : ndarray, shape=(n, n), dtype=float
+        The updated subset of eigenvalues
+    eigen_values : ndarray, shape=(n, n), dtype=float
+        The updated subset of corresponding eigenvectors.
+    """
+    eig_values, eig_vectors, n_triv = enm.eigen(n_zero=True)
+    eig_vectors = eig_vectors.T
+
+    # Choose modes included in computation; raise error, if trivial
+    # modes are included
+    if mode_subset is None:
+        mode_subset = np.arange(n_triv, len(eig_values))
+    elif np.any(mode_subset < n_triv):
+        raise ValueError(
+            "Trivial modes are included in the current selection. "
+            "Please check your input."
+        )
+
+    slice_i, slice_j, slice_t, delta = enm.prepare_one_rank_update(
+        atom_i, atom_j, delta
+    )
+    z = slice_t @ eig_vectors[slice_i] - slice_t @ eig_vectors[slice_j]
+
+    rho = np.asarray(delta).item()
+    mode_subset = mode_subset.astype(np.intc)
+    eig_values_pert, eig_vectors_delta = eigen_chng(eig_values, z, rho, mode_subset)
+
+    w = z / eig_vectors_delta
+    w = w / np.linalg.norm(w, axis=1).reshape(-1, 1)
+    eig_vectors_pert = w @ eig_vectors.T
+
+    return eig_values_pert, eig_vectors_pert
