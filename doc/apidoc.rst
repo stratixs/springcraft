@@ -8,20 +8,92 @@ API Reference
    :depth: 3
 
 
-Network models
+Network Models
 --------------
 
 .. autoclass:: GNM
-   :members:
-   :inherited-members:
+
+   Normal Mode Analysis
+   ~~~~~~~~~~~~~~~~~~~~
+   .. automethod:: frequencies
+   .. automethod:: mean_square_fluctuation
+   .. automethod:: bfactor
+   .. automethod:: dcc
+
+   Model Modifications
+   ~~~~~~~~~~~~~~~~~~~
+   .. automethod:: modify_contact
+   .. automethod:: modify_atom
+
+   Normal Mode Anaysis Update
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~
+   .. automethod:: frequencies_update
+   .. automethod:: mean_square_fluctuation_update
+   .. automethod:: bfactor_update
+   .. automethod:: dcc_update
 
 |
 
 .. autoclass:: ANM
-   :members:
-   :inherited-members:
+
+   Normal Mode Analysis
+   ~~~~~~~~~~~~~~~~~~~~
+   .. automethod:: frequencies
+   .. automethod:: mean_square_fluctuation
+   .. automethod:: bfactor
+   .. automethod:: dcc
+
+   Model Modifications
+   ~~~~~~~~~~~~~~~~~~~
+   .. automethod:: modify_contact
+   .. automethod:: modify_atom
+
+   Normal Mode Anaysis Update
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~
+   .. automethod:: frequencies_update
+   .. automethod:: mean_square_fluctuation_update
+   .. automethod:: bfactor_update
+   .. automethod:: dcc_update
 
 |
+
+.. autoclass:: springcraft.enm.ENM
+
+   .. automethod:: eigen
+
+|
+
+.. autoclass:: springcraft.enm_update.ENMUpdate
+
+   .. automethod:: prepare_update
+   .. automethod:: interactions_update
+   .. automethod:: covariance_update
+
+
+Normal Mode Analysis
+--------------------
+
+.. autofunction:: springcraft.nma.frequencies
+
+.. autofunction:: springcraft.nma.mean_square_fluctuation
+
+.. autofunction:: springcraft.nma.bfactor
+
+.. autofunction:: springcraft.nma.dcc
+
+
+Normal Mode Analysis Update
+---------------------------
+
+.. autofunction:: springcraft.nma_update.frequencies_update
+
+.. autofunction:: springcraft.nma_update.mean_square_fluctuation_update
+
+.. autofunction:: springcraft.nma_update.bfactor_update
+
+.. autofunction:: springcraft.nma_update.dcc_update
+
+.. autofunction:: springcraft.nma_update._calc_updated_eigen
 
 
 Force Fields

@@ -57,34 +57,49 @@ def frequencies(enm) -> np.ndarray:
     """
     Computes the frequency associated with each mode.
 
-    The modes corresponding to rigid-body translations/rotations are
-    omitted in the return value.
-    The returned units are arbitrary and should only be compared
-    relative to each other.
+    The modes corresponding to rigid-body translations/rotations are ``NaN`` in the
+    return value. The returned units are arbitrary and should only be compared relative
+    to each other.
 
     Parameters
     ----------
-    enm : ANM or GNM
-        Elastic network model; an instance of either a GNM or ANM
-        object.
+    enm : ENM
+        Elastic network model
 
     Returns
     -------
     freq : ndarray, shape=(n,), dtype=float
-        The frequency in ascending order of the associated modes'
-        Eigenvalues.
+        Oscillation frequencies of the model in descending order. ``NaN`` values mark
+        frequencies corresponding to translations or rotations. These are guaranteed to
+        be the ``k`` elements.
+
+    Raises
+    ------
+    ValueError
+        If the supplied `enm` is not an :class:`ENM`.
+
+    See Also
+    --------
+    springcraft.enm.ENM.eigen : Eigenvalue calculation
+
+    Notes
+    -----
+    Given a set of :math:`\\lambda` of eigenvalues the frequencies :math:`f` are
+    calculated as
+
+    .. math:: f_i = \\frac{1}{2 \\pi \\sqrt{\\lambda_i}}
+
     """
     from springcraft.enm import ENM
 
     if not isinstance(enm, ENM):
         raise ValueError("Instance of ENM class expected.")
 
-    eig_values, _, n_triv = enm.eigen(n_zero=True, copy=False)
+    eig_values, _ = enm.eigen(copy=False)
 
     # The very first / first six Eigenvalue(s) is/are usually close to 0;
     # but can have a negative sign.
-    eig_values = eig_values.copy()
-    eig_values[:n_triv] = np.abs(eig_values[:n_triv])
+    eig_values = np.abs(eig_values)
 
     return 1 / (2 * np.pi) * np.sqrt(eig_values)
 
@@ -92,36 +107,53 @@ def frequencies(enm) -> np.ndarray:
 def mean_square_fluctuation(
     enm,
     mode_subset: np.ndarray | None = None,
-    tem: int | float | None = None,
-    tem_factors: int | float = K_B,
+    tem: float | int | None = None,
+    tem_factors: float | int = K_B,
 ) -> np.ndarray:
     """
-    Compute the *mean square fluctuation* for the atoms according
-    to the ENM.
+    Compute the *mean square fluctuation* (msqf) for the atoms according to the
+    :class:`ENM`.
 
-    Uses covariance diagonal if available and full set is considered.
+    If all non-trivial modes are considered the msqf can be directly retrieved from the
+    covariance matrix:
+
+    * In case of the :class:`GNM` the msqf are simply the main diagonal entries.
+    * In case of the :class:`ANM` the msqf are the traces of the main diagonal 3x3
+      superelements.
 
     Parameters
     ----------
     enm : ENM
         Elastic network model.
-    mode_subset : ndarray, shape=(k,), dtype=int, optional
-        Specifies the subset of modes considered in the computation.
-        The first mode is counted as 0 in accordance with
-        Python conventions.
-        If ``mode_subset`` is None, all non-trivial modes are included.
-    tem : int, float, None, optional
-        Temperature in Kelvin to compute the temperature scaling
-        factor by multiplying with the Boltzmann constant.
-        If ``tem`` is None, no temperature scaling is conducted.
-    tem_factors : int, float, optional
-        Factors included in temperature weighting
-        (with ``K_B`` as preset).
+    mode_subset : ndarray, shape=(k,), dtype=int or None, optional
+        Specifies the subset of modes considered in the computation. Only non-trivial
+        modes can be selected. The first mode is counted as 0 in accordance with Python
+        conventions.
+        If `mode_subset` is ``None``, all non-trivial modes are included.
+        The default is ``None``.
+    tem : float or int or None, optional
+        Temperature in Kelvin to compute the temperature scaling factor by multiplying
+        with `tem_factor`. If ``tem`` is ``None``, no temp scaling is conducted.
+        The default is ``None``.
+    tem_factors : float or int, optional
+        Factors included in temperature weighting.
+        The default is ``K_B`` (the *Boltzmann* constant).
 
     Returns
     -------
     msqf : ndarray, shape=(n,), dtype=float
         The mean square fluctuations for each atom in the model.
+
+    Raises
+    ------
+    ValueError
+        * If the supplied `enm` is not an :class:`ENM` or
+        * if trivial modes are included in the subset.
+
+    See Also
+    --------
+    springcraft.enm.ENM : Regarding the `covariance` attribute.
+    springcraft.enm.ENM.eigen : Eigenvalue calculation
     """
     from springcraft.enm import ENM
 
@@ -160,33 +192,44 @@ def bfactor(
     tem_factors: int | float = K_B,
 ) -> np.ndarray:
     """
-    Computes the isotropic B-factors/temperature factors/
-    Debye-Waller factors for atoms/coarse-grained nodes using
-    the mean-square fluctuation.
-    These can be used to relate results obtained from ENMs
-    to experimental results.
+    Computes the isotropic *B-factors/temperature factors/Debye-Waller factors* for
+    atoms/coarse-grained nodes using the mean-square fluctuation. These can be used to
+    relate results obtained from ENMs to experimental results.
 
     Parameters
     ----------
     enm : ENM
         Elastic network model.
-    mode_subset : ndarray, shape=(k,), dtype=int, optional
-        Specifies the subset of modes considered in the computation.
-        The first mode is counted as 0 in accordance with
-        Python conventions.
-        If ``mode_subset`` is None, all non-trivial modes are included.
-    tem : int, float, None, optional
-        Temperature in Kelvin to compute the temperature scaling
-        factor by multiplying with the Boltzmann constant.
-        If ``tem`` is None, no temperature scaling is conducted.
-    tem_factors : int, float, optional
-        Factors included in temperature weighting
-        (with ``K_B`` as preset).
+    mode_subset : ndarray, shape=(k,), dtype=int or None, optional
+        Specifies the subset of modes considered in the computation. Only non-trivial
+        modes can be selected. The first mode is counted as 0 in accordance with Python
+        conventions.
+        If `mode_subset` is ``None``, all non-trivial modes are included.
+        The default is ``None``.
+    tem : float or int or None, optional
+        Temperature in Kelvin to compute the temperature scaling factor by multiplying
+        with `tem_factor`. If ``tem`` is ``None``, no temp scaling is conducted.
+        The default is ``None``.
+    tem_factors : float or int, optional
+        Factors included in temperature weighting.
+        The default is ``K_B`` (the *Boltzmann* constant).
 
     Returns
     -------
-    bfac_values : ndarray, shape=(n,), dtype=float
+    b_factors : ndarray, shape=(n,), dtype=float
         B-factors of C-alpha atoms.
+
+    See Also
+    --------
+    mean_square_fluctuation : The msqf calculation
+
+    Notes
+    -----
+    Given a set of :math:`m` of mean square fluctuations the B-factors :math:`b` are
+    calculated as
+
+    .. math:: b_i = \\frac{8 \\pi^2}{3} m_i
+
     """
     msqf = mean_square_fluctuation(enm, mode_subset, tem, tem_factors)
     b_factors = ((8 * np.pi**2) * msqf) / 3
@@ -208,23 +251,23 @@ def dcc(
     Parameters
     ----------
     enm : ANM or GNM
-        Elastic network model; an instance of either a GNM or ANM
-        object.
-    mode_subset : ndarray, shape=(k,), dtype=int, optional
-        Specifies the subset of modes considered in the computation.
-        Only non-trivial modes can be selected.
-        The first mode is counted as 0 in accordance with
-        Python conventions.
-        If ``mode_subset`` is None, all non-trivial modes are included.
+        Elastic network model.
+    mode_subset : ndarray, shape=(k,), dtype=int or None, optional
+        Specifies the subset of modes considered in the computation. Only non-trivial
+        modes can be selected. The first mode is counted as 0 in accordance with Python
+        conventions.
+        If `mode_subset` is ``None``, all non-trivial modes are included.
+        The default is ``None``.
     norm : bool, optional
-        Normalize the DCC using the MSFs of interacting nodes.
-    tem : int, float, None, optional
-        Temperature in Kelvin to compute the temperature scaling
-        factor by multiplying with the Boltzmann constant.
-        If ``tem`` is None, no temperature scaling is conducted.
-    tem_factors : int, float, optional
-        Factors included in temperature weighting
-        (with :math:`k_B` as preset).
+        Normalize the DCC using the msqf of interacting nodes.
+        The default is ``True``.
+    tem : float or int or None, optional
+        Temperature in Kelvin to compute the temperature scaling factor by multiplying
+        with `tem_factor`. If ``tem`` is ``None``, no temp scaling is conducted.
+        The default is ``None``.
+    tem_factors : float or int, optional
+        Factors included in temperature weighting.
+        The default is ``K_B`` (the *Boltzmann* constant).
 
     Returns
     -------
@@ -238,7 +281,9 @@ def dcc(
 
     .. math::
 
-        DCC_{ij} = \frac{3 k_B T}{\gamma} \sum_k^L \left[ \frac{\vec{u}_k \cdot \vec{u}_k^T}{\lambda_k} \right]_{ij}
+        DCC_{ij} = \frac{3 k_B T}{\gamma} \sum_k^L \left[
+                     \frac{\vec{u}_k \cdot \vec{u}_k^T}{\lambda_k}
+                   \right]_{ij}
 
     with :math:`\lambda` and :math:`\vec{u}` as
     Eigenvalues and Eigenvectors corresponding to mode :math:`k` of

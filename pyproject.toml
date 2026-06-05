@@ -58,25 +58,13 @@ scipy = ">=1.9"
 [tool.poetry.group.dev.dependencies]
 pytest = ">=8.0"
 pytest-cov = ">=7.1.0"
-pytest-benchmark = ">=5.2.3"
 ruff = "==0.9.7"
 cython = ">=3.0"
-
-[tool.poetry.group.docs.dependencies]
-ammolite = ">=0.8"
-jinja2 = ">=3.1"
-matplotlib = ">=3.3"
-numpydoc = ">=0.8"
-sphinx = ">=3.0"
-sphinx-gallery = ">=0.9.0"
 
 [tool.ruff.lint]
 # pyflakes, pycodestyle isort and variable naming
 select = ["F", "E", "W", "I", "TID", "N"]
 ignore = [
-    # In docstrings long lines are often intentional
-    # Most other ocassions are caught by the ruff formatter
-    "E501",
     # camel cases for forcefields
     "N802",
     # eANM/sdENM as static methods of TabulatedForceField
@@ -85,6 +73,9 @@ ignore = [
     # Due to constants used in functions
     "N806",
 ]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
 
 [tool.ruff.lint.per-file-ignores]
 # Due to `from .module import *` imports in `__init__.py` modules

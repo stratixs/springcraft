@@ -2,7 +2,7 @@
 # After creating the environment install the required packages with
 #   poetry config virtualenvs.create false
 #   poetry install
-name: springcraft-dev
+name: springcraft-docs
 
 channels:
   - conda-forge
@@ -10,3 +10,14 @@ channels:
 dependencies:
   - python=3.11
   - poetry
+
+  - sphinx>=3.0
+  - sphinx-gallery>=0.9.0
+  - matplotlib>=3.3
+  - numpydoc>=0.8
+  - jinja2>=3.1
+  - pymol-open-source
+
+  - pip
+  - pip:
+      - ammolite>=0.8

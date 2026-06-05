@@ -8,7 +8,6 @@ __version__ = "0.3.0"
 __author__ = "Patrick Kunzmann"
 __all__ = []
 
-
 from .anm import *
 from .forcefield import *
 from .gnm import *

@@ -1,6 +1,7 @@
 """
-This module contains the :class:`ENM` class. An abstract base class for molecular dynamics calculations Models.
-Extends the ENM base class with low rank perturbation calculation.
+This module contains the :class:`ENM` class. An abstract base class for molecular
+dynamics calculations Models. Extends the ENM base class with low rank perturbation
+calculation.
 """
 
 __name__ = "springcraft"
@@ -23,33 +24,20 @@ ger = blas.get_blas_funcs("ger", dtype=np.float64)
 class ENMUpdate(ENM):
     def modify_contact(self, atom_i: int, atom_j: int, delta: bool | int | float):
         """
-        Modifies the force constant in the `interaction` matrix between a
-        pair of `atoms`. The interaction between the atoms can either be
-        - turned off (the force constant is set to 0),
-        - changed by an arbitrary amount `delta` or
-        - turned on (reset to the value defined by the `force_field`).
-        Turning on only works, if the contact is within cutoff distance.
-        Otherwise nothing happens.
+        Changes the interaction strength between atoms `i` and `j` of this model by
+        `delta`. Results in a change to the `interaction` matrix.
 
-        If the `covariance` matrix exists, a low complexity algorithm is
-        used to update the covariance matrix according to the small
-        perturbation introduced to the `interaction` matrix.
-
-        The `interaction` matrix needs to be present.
-        The `adjacency` matrix needs to be present, if you do not change
-        the interactions strengths by an arbitrary amount. The
-        `adjacency` matrix is present, if neither the `interaction`
-        nor the `covariance` matrix were set manually.
+        If the `covariance` matrix exists, a low complexity algorithm is used to update
+        the covariance matrix according to the small perturbation introduced to the
+        `interaction` matrix.
 
         Parameters
         ----------
         atom_i, atom_j : int
             Atom indices with ``atom_i != atom_j``
-        delta : bool | int | float
-            A bool value gets interpreted as a turn on/off signal.
-            Turning on resets the contact interaction strength to the initial value.
-            Turning off sets the contact interaction strength to zero.
-            A scalar value changes the contact interaction strength by the given amount.
+        delta : bool or int or float
+            The change in interaction strength (``True``: reset, ``False``: set 0,
+            scalar: change by value)
 
         Raises
         ------
@@ -59,6 +47,13 @@ class ENMUpdate(ENM):
             If any index is out of bounds or the indices are the same
         ValueError
             If the resulting `delta` is (nearly) 0.
+
+        See Also
+        --------
+        springcraft.enm_update.ENMUpdate.prepare_update :
+            More Information about the update parameters
+        springcraft.enm_update.ENMUpdate.covariance_update :
+            More information about the covariance update
         """
         slice_i, slice_j, slice_t, delta = self.prepare_update(atom_i, atom_j, delta)
 
@@ -74,22 +69,14 @@ class ENMUpdate(ENM):
     @abstractmethod
     def modify_atom(self, atom_i: int, new_atom: bool | struc.Atom):
         """
-        Modifies the force constants in the `interaction` matrix between the
-        `atom_i` and all its adjacent atoms. An atom is defined as adjacent
-        if it is within cutoff distance. An atom can be either be
-        - turned off (interactions to all atoms are turned off),
-        - turned on (interactions to all adjacent atoms are turned on) or
-        - modified in a way, that the interaction strengths to its
-        adjacent atoms change. This results in a recalculation of all
-        interactions of `atom_i`.
+        Changes the interaction strength between atom `i` and every other connected atom
+        of this model. Results in a change to the `interaction` matrix.
 
-        If the `covariance` matrix exists, a low complexity algorithm is
-        used to update the covariance matrix according to the small
-        perturbation introduced to the `interaction` matrix.
+        If the `covariance` matrix exists, a low complexity algorithm is used to update
+        the covariance matrix according to the small perturbation introduced to the
+        `interaction` matrix.
 
-        The `interaction` and the `adjacency` matrix need to be present.
-        The `adjacency` matrix is present, if neither the `interaction`
-        nor the `covariance` matrix were set manually.
+        This is essentially a series applications of `modify_contact`.
 
         Parameters
         ----------
@@ -97,21 +84,29 @@ class ENMUpdate(ENM):
             The index of the atom to change.
         new_atom : bool or Atom
             A bool gets interpreted as a turn on/off signal.
+            Turning on resets every contact interaction strength of this atom to the
+            initial value. Turning off sets every contact interaction strength to zero.
             An Atom may result in a change to the `ForceField`.
+
         Raises
         -----
         AttributeError
             If the `interaction` matrix does not exist.
         IndexError
-            If any indices are out of bounds for the initialized structure.
+            If the `atom_i` index is out of bounds for the initialized structure.
         ValueError
             If new Atom does not change any force constants.
+
+        See Also
+        --------
+        springcraft.enm_update.ENMUpdate.covariance_update :
+            More information about the covariance update
         """
         if self._interactions is None:
             raise AttributeError("Interaction matrix must exist.")
         if atom_i < 0 or atom_i >= self._natoms:
             raise IndexError(
-                f"atom_i={atom_i} is out of bounds for structure of length {self._natoms}."
+                f"{atom_i} is out of bounds for structure of length {self._natoms}."
             )
         if isinstance(new_atom, struc.Atom) and not self._ff.update(atom_i, new_atom):
             raise ValueError("No change in atom detected.")
@@ -121,15 +116,9 @@ class ENMUpdate(ENM):
         self, atom_i: int, atom_j: int, delta: bool | int | float
     ) -> tuple[slice, slice, np.ndarray, float]:
         """
-        This method checks arguments and provides values to describe a
-        one-rank update to the interaction matrix A. The one-rank permutation
-        :math:`A + \delta \vec{u} \vec{u}^T` can be described using the return
-        values by
-
-        >>> u = np.zeros(n)
-        ... u[slice_i] = slice_t
-            u[slice_j] = -slice_t
-            A + delta * np.outer(u, u)
+        This method checks arguments and provides values to describe an to the
+        interaction matrix A where the interaction strength between atoms `i` and `j` is
+        changed by `delta`.
 
         Does not change any attributes of the ENM class.
 
@@ -160,6 +149,22 @@ class ENMUpdate(ENM):
             If any index is out of bounds or the indices are the same
         ValueError
             If the resulting `delta` is (nearly) 0.
+
+        Notes
+        -----
+        The desired update to the `interaction` matrix :math:`\\Gamma` can be described
+        as a rank-one update using a vector :math:`\\vec{c}` of appropriate dimensions
+        like
+
+        .. math:: \\Gamma + \\delta \\vec{c} \\vec{c}^T
+
+        This update can be achieved using the return values like
+
+        >>> c = np.zeros(n)
+        ... c[slice_i] = slice_t
+            c[slice_j] = -slice_t
+            interactions + delta * np.outer(c, c)
+
         """
         if self._interactions is None:
             raise AttributeError("Interaction matrix must exist.")
@@ -183,14 +188,10 @@ class ENMUpdate(ENM):
         delta: float,
     ):
         """
-        Performs a one-rank permutation to the given `interactions`
-        matrix A. The permutation :math:`A + \delta \vec{u} \vec{u}^T`
-        can be described using the attributes by
+        Performs a one-rank permutation to the given `interactions` matrix where the
+        interaction strength between atoms `i` and `j` is changed by `delta`.
 
-        >>> u = np.zeros(n)
-        ... u[slice_i] = slice_t
-            u[slice_j] = -slice_t
-            A + delta * np.outer(u, u)
+        This method does not perform any input checking.
 
         Parameters
         ----------
@@ -203,9 +204,11 @@ class ENMUpdate(ENM):
         delta : float
             Permutation factor
 
-        Notes
-        -----
-        This method does not perform any input checking.
+        See Also
+        --------
+        springcraft.enm_update.ENMUpdate.prepare_update :
+           More information about the update parameters
+
         """
         if slice_t is None:
             tensor = delta
@@ -228,21 +231,17 @@ class ENMUpdate(ENM):
         update: Callable,
     ):
         """
-        Performs a one-rank permutation on the given `covariance`
-        matrix. The permutation to the corresponding interaction matrix
-        :math:`A + \delta \vec{u} \vec{u}^T` can be described using the
-        attributes by
+        Performs a one-rank permutation on the given `interactions` matrix where the
+        interaction strength between atoms `i` and `j` is changed by `delta`.
 
-        >>> u = np.zeros(n)
-        ... u[slice_i] = slice_t
-            u[slice_j] = -slice_t
-            A + delta * np.outer(u, u)
+        The `update` Callable allows for different appliances of the update mechanism.
+        It must have the following signature
+        ``def update(alpha: float, x: np.ndarray, y: np.ndarray)`` and describe the
+        following permutation to covariance matrix ``C``:
 
-        The `update` Callable allows for different appliances of the
-        update mechanism. It must have the following signature
-        `def update(alpha: float, x: np.ndarray, y: np.ndarray)` and
-        describes the following permutation to covariance matrix C:
-        :math:`C + \alpha \vec{x} \vec{y}^T`
+        >>> C + alpha * np.outer(x, y)
+
+        This method does not perform any input checking.
 
         Parameters
         ----------
@@ -257,9 +256,32 @@ class ENMUpdate(ENM):
         update : Callable
             One-rank permutation to the covariance matrix
 
+        See Also
+        --------
+        springcraft.enm_update.ENMUpdate.prepare_update :
+           More information about the update parameters
+
         Notes
         -----
-        This method does not perform any input checking.
+        Let the `covariance` matrix :math:`\\zeta` be the pseudo inverse of the
+        `interactions` matrix :math:`\\Gamma`. Changing the force constant between atoms
+        `i` and `j` by an arbitrary amount :math:`\\delta` can be described by a
+        rank-one update to :math:`\\Gamma` with a vector :math:`\\vec{c}` of matching
+        dimensions like
+
+        .. math:: \\tilde{\\Gamma} = \\Gamma + \\delta \\vec{c} \\vec{c}^T
+
+        This rank-one update can increase or decrease the rank or leave it unchanged.
+
+        If the rank is unchanged than the updated covariance matrix can be described by
+
+        .. math:: \\tilde{\\zeta} = \\zeta +
+                                    \\frac{\\zeta \\vec{c} \\delta \\vec{c}^T \\zeta}
+                                          {1 + \\delta \\vec{c}^T \\zeta \\vec{c}}
+                                  = \\zeta + \\frac{\\vec{x} \\vec{x}^T}{\\beta}
+
+        with :math:`\\vec{x} = \\zeta \\vec{c}` and
+        :math:`\\beta = 1 + \\delta \\vec{c}^T \\zeta \\vec{c}`.
         """
         if slice_t is None:
             slice_t = 1  # pyright: ignore[reportAssignmentType]
@@ -352,35 +374,40 @@ class ENMUpdate(ENM):
         delta: float | int | bool,
     ) -> np.ndarray:
         """
-        Computes the frequency associated with each mode for the permutated
-        ENM where the interaction strength between atoms `i` and `j` is
-        changed by `delta`.
+        Compute the oscillation frequencies of a permutated model where the interaction
+        strength between atoms `i` and `j` is changed by `delta`.
 
-        The modes corresponding to rigid-body translations/rotations are
-        omitted in the return value.
-        The returned units are arbitrary and should only be compared
-        relative to each other.
+        Significantly faster than modifying the model and calculating from scratch. Does
+        not change any model attributes.
 
         Parameters
         ----------
         atom_i, atom_j : int
             Atom indices with ``atom_i != atom_j``
         delta : bool or int or float
-            A bool value gets interpreted as a turn on/off signal.
-            Turning on resets the contact interaction strength to the initial value.
-            Turning off sets the contact interaction strength to zero.
-            A scalar value changes the contact interaction strength by the given amount.
+            The change in interaction strength (``True``: reset, ``False``: set 0,
+            scalar: change by value)
 
         Returns
         -------
         freq : ndarray, shape=(n,), dtype=float
-            The frequency in ascending order of the associated modes'
-            Eigenvalues.
+            Oscillation frequencies of the updated model.
 
-        Raises
-        ------
-        AttributeError
-            If the ENM's eigenvalues and eigenvectors do not exist.
+        See Also
+        --------
+        springcraft.enm_update.ENMUpdate.prepare_update :
+           More information about the update parameters
+        springcraft.nma.frequencies : The frequency calculation
+        springcraft.nma_update.frequencies_update : The frequency update
+
+        Examples
+        --------
+        The following two snippets create the same result
+
+        >>> freq = enm.frequencies_update(atom_i, atom_j, delta)
+
+        >>> enm.modify_contact(atom_i, atom_j, delta)
+        >>> freq = enm.frequencies()
         """
         return nma_update.frequencies_update(self, atom_i, atom_j, delta)
 
@@ -394,43 +421,50 @@ class ENMUpdate(ENM):
         tem_factors: int | float = K_B,
     ) -> np.ndarray:
         """
-        Compute the change in the *mean square fluctuation* for the atoms
-        according to the ENM for a rank-one update to the model.
+        Compute the *mean square fluctuation* for the atoms of a permutated model where
+        the interaction strength between atoms `i` and `j` is changed by `delta`.
+
+        Significantly faster than creating a modified model and calculating from
+        scratch. Does not change any model attributes.
 
         Parameters
         ----------
         atom_i, atom_j : int
             Atom indices with ``atom_i != atom_j``
         delta : bool or int or float
-            A bool value gets interpreted as a turn on/off signal.
-            Turning on resets the contact interaction strength to the initial value.
-            Turning off sets the contact interaction strength to zero.
-            A scalar value changes the contact interaction strength by the given amount.
+            The change in interaction strength (``True``: reset, ``False``: set 0,
+            scalar: change by value)
         mode_subset : ndarray, shape=(k,), dtype=int, optional
             Specifies the subset of modes considered in the computation.
-            The first mode is counted as 0 in accordance with Python conventions.
-            If ``mode_subset`` is None, all non-trivial modes are included.
-        tem : int, float, None, optional
-            Temperature in Kelvin to compute the temperature scaling
-            factor by multiplying with the Boltzmann constant.
-            If ``tem`` is None, no temperature scaling is conducted.
-        tem_factors : int, float, optional
-            Factors included in temperature weighting
-            (with ``K_B`` as preset).
+        tem : float or int or None, optional
+            Temperature in Kelvin. If ``tem`` is ``None``, no temp scaling is conducted.
+            The default is ``None``.
+        tem_factors : float or int, optional
+            Factors included in temperature weighting.
+            The default is ``K_B``.
 
         Returns
         -------
         msqf : ndarray, shape=(n,), dtype=float
-            The mean square fluctuations for each atom in the model.
+            The mean square fluctuations for each atom in the updated model.
 
-        Raises
-        ------
-        AttributeError
-            If the `interaction` or `covariance` matrix does not exist.
-        IndexError
-            If any index is out of bounds or the indices are the same
-        ValueError
-            If the resulting `delta` is (nearly) 0.
+        See Also
+        --------
+        springcraft.enm_update.ENMUpdate.prepare_update :
+           More information about the update parameters
+        springcraft.nma.mean_square_fluctuation :
+            The mean square fluctuation calculation
+        springcraft.nma_update.mean_square_fluctuation_update :
+            The mean square fluctuation update
+
+        Examples
+        --------
+        The following two snippets create the same result
+
+        >>> msqf = enm.mean_square_fluctuation_update(atom_i, atom_j, delta)
+
+        >>> enm.modify_contact(atom_i, atom_j, delta)
+        >>> msqf = enm.mean_square_fluctuation()
         """
         return nma_update.mean_square_fluctuation_update(
             self, atom_i, atom_j, delta, mode_subset, tem, tem_factors
@@ -442,50 +476,52 @@ class ENMUpdate(ENM):
         atom_j: int,
         delta: float | int | bool,
         mode_subset: np.ndarray | None = None,
-        tem: int | float | None = None,
-        tem_factors: int | float = K_B,
+        tem: float | int | None = None,
+        tem_factors: float | int = K_B,
     ) -> np.ndarray:
         """
-        Computes the isotropic B-factors/temperature factors/
-        Debye-Waller factors for atoms/coarse-grained nodes using
-        the mean-square fluctuation for a rank-one update to the model.
-        These can be used to relate results obtained from ENMs
-        to experimental results.
+        Compute the *mean square fluctuation* for the atoms of a permutated model where
+        the interaction strength between atoms `i` and `j` is changed by `delta`.
+
+        Significantly faster than creating a modified model and calculating from
+        scratch. Does not change any model attributes.
 
         Parameters
         ----------
         atom_i, atom_j : int
             Atom indices with ``atom_i != atom_j``
         delta : bool or int or float
-            A bool value gets interpreted as a turn on/off signal.
-            Turning on resets the contact interaction strength to the initial value.
-            Turning off sets the contact interaction strength to zero.
-            A scalar value changes the contact interaction strength by the given amount.
+            The change in interaction strength (``True``: reset, ``False``: set 0,
+            scalar: change by value)
         mode_subset : ndarray, shape=(k,), dtype=int, optional
             Specifies the subset of modes considered in the computation.
-            The first mode is counted as 0 in accordance with Python conventions.
-            If ``mode_subset`` is None, all non-trivial modes are included.
-        tem : int, float, None, optional
-            Temperature in Kelvin to compute the temperature scaling
-            factor by multiplying with the Boltzmann constant.
-            If ``tem`` is None, no temperature scaling is conducted.
-        tem_factors : int, float, optional
-            Factors included in temperature weighting
-            (with ``K_B`` as preset).
+        tem : float or int or None, optional
+            Temperature in Kelvin. If ``tem`` is ``None``, no temp scaling is conducted.
+            The default is ``None``.
+        tem_factors : float or int, optional
+            Factors included in temperature weighting.
+            The default is ``K_B``.
 
         Returns
         -------
-        bfac_values : ndarray, shape=(n,), dtype=float
-            B-factors of C-alpha atoms.
+        b_factors : ndarray, shape=(n,), dtype=float
+            B-factors of C-alpha atoms in the updated model.
 
-        Raises
-        ------
-        AttributeError
-            If the `interaction` or `covariance` matrix does not exist.
-        IndexError
-            If any index is out of bounds or the indices are the same
-        ValueError
-            If the resulting `delta` is (nearly) 0.
+        See Also
+        --------
+        springcraft.enm_update.ENMUpdate.prepare_update :
+            More information about the update parameters
+        springcraft.nma.bfactor : The B-factor calculation
+        springcraft.nma_update.bfactor_update : The B-factor update
+
+        Examples
+        --------
+        The following two snippets create the same result
+
+        >>> bfactors = enm.bfactor_update(atom_i, atom_j, delta)
+
+        >>> enm.modify_contact(atom_i, atom_j, delta)
+        >>> bfactors = enm.bfactor()
         """
         return nma_update.bfactor_update(
             self, atom_i, atom_j, delta, mode_subset, tem, tem_factors
@@ -498,68 +534,56 @@ class ENMUpdate(ENM):
         delta: float | int | bool,
         mode_subset: np.ndarray | None = None,
         norm: bool = True,
-        tem: int | float | None = None,
-        tem_factors: int | float = K_B,
+        tem: float | int | None = None,
+        tem_factors: float | int = K_B,
     ) -> np.ndarray:
-        r"""
-        Computes the normalized *dynamic cross-correlation* between
-        nodes of the ENM for a rank-one updated model.
+        """
+        Compute the *dynamic cross-correlation* between nodes of a permutated model
+        where the interaction strength between atoms `i` and `j` is changed by `delta`.
 
-        The method does not change any attributes of the model class.
+        Significantly faster than creating a modified model and calculating from
+        scratch. Does not change any model attributes.
 
         Parameters
         ----------
         atom_i, atom_j : int
             Atom indices with ``atom_i != atom_j``
         delta : bool or int or float
-            A bool value gets interpreted as a turn on/off signal.
-            Turning on resets the contact interaction strength to the initial value.
-            Turning off sets the contact interaction strength to zero.
-            A scalar value changes the contact interaction strength by the given amount.
-        mode_subset : ndarray, shape=(k,), dtype=int, optional
+            The change in interaction strength (``True``: reset, ``False``: set 0,
+            scalar: change by value)
+        mode_subset : ndarray, shape=(k,), dtype=int or None, optional
             Specifies the subset of modes considered in the computation.
-            The first mode is counted as 0 in accordance with Python conventions.
-            If ``mode_subset`` is None, all non-trivial modes are included.
-        norm : bool, optional
-            Normalize the DCC using the MSFs of interacting nodes.
-        tem : int, float, None, optional
-            Temperature in Kelvin to compute the temperature scaling
-            factor by multiplying with the Boltzmann constant.
-            If tem is None, no temperature scaling is conducted.
-        tem_factors : int, float, optional
-            Factors included in temperature weighting
-            (with :math:`k_B` as preset).
+            The default is ``None``.
+        norm : bool
+            Whether to normalize using the mean square fluctuations.
+            The default is ``True``.
+        tem : float or int or None, optional
+            Temperature in Kelvin. If ``tem`` is ``None``, no temp scaling is conducted.
+            The default is ``None``.
+        tem_factors : float or int, optional
+            Factors included in temperature weighting.
+            The default is ``K_B``.
 
         Returns
         -------
         dcc : ndarray, shape=(n, n), dtype=float
-            DCC values for updated ENM nodes as NxN matrix.
+            DCC values for the model nodes.
 
-        Notes
-        -----
+        See Also
+        --------
+        springcraft.enm_update.ENMUpdate.prepare_update :
+            More information about the update parameters
+        springcraft.nma.dcc : The DCC calculation
+        springcraft.nma_update.dcc_update : The DCC update
 
-        The DCC for a nodepair :math:`ij` is computed as:
+        Examples
+        --------
+        The following two snippets create the same result
 
-        .. math::
+        >>> dcc = enm.dcc_update(atom_i, atom_j, delta)
 
-            DCC_{ij} = \frac{3 k_B T}{\gamma} \sum_k^L \left[ \frac{\vec{u}_k \cdot \vec{u}_k^T}{\lambda_k} \right]_{ij}
-
-        with :math:`\lambda` and :math:`\vec{u}` as
-        Eigenvalues and Eigenvectors corresponding to mode :math:`k` of
-        the modeset :math:`L`.
-
-        DCCs can be normalized to MSFs exhibited by two compared nodes
-        following:
-
-        .. math::
-
-            nDCC_{ij} = \frac{DCC_{ij}}{[DCC_{ii} DCC_{jj}]^{1/2}}
-
-        When all modes are considered, the DCC is equal to the covariance matrix
-        of GNMs or to the trace of all supermatrices (3x3) of the
-        covariance matrix (3Nx3N) in the case of ANMs.
-        Consequently, these are returned if standard parameters
-        for ``mode_subset`` and ``memory_efficient`` are passed to the function.
+        >>> enm.modify_contact(atom_i, atom_j, delta)
+        >>> dcc = enm.dcc()
         """
         return nma_update.dcc_update(
             self, atom_i, atom_j, delta, mode_subset, norm, tem, tem_factors
