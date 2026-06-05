@@ -9,7 +9,7 @@ from Cython.Build import cythonize
 from setuptools import Distribution, Extension
 from setuptools.command.build_ext import build_ext
 
-COMPILE_ARGS = ["-march=native", "-O3", "-msse", "-msse2", "-mfma", "-mfpmath=sse"]
+COMPILE_ARGS = ["-O3"]
 LINK_ARGS = []
 INCLUDE_DIRS = [np.get_include()]
 LIBRARIES = ["m"]

@@ -46,6 +46,10 @@ include = [
     { path = "package/**/*.so", format = "wheel" },
 ]
 
+[tool.cibuildwheel]
+build = ["cp311-*", "cp312-*", "cp313-*"]
+skip = ["pp*"]
+
 [tool.poetry.build]
 script = "scripts/build-extension.py"
 
