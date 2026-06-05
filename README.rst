@@ -54,8 +54,23 @@ For development and testing first create a conda enviroment from the
    $ poetry config virtualenvs.create false
    $ poetry install
 
+Run tests with `pytest` like this
+
+.. code-block:: console
+
+   $ pytest tests/
+   $ pytest tests/ --cov=src --cov-report=html --cov-branch  # to run with coverage
+
+If you additionally want to render the documentation use the environment in
+`environment-docs.yml` and follow the same steps as above. To generate the
+documentation html with sphinx run
+
+.. code-block:: console
+
+   $ sphinx-build -E -a -b html doc doc/build/html
+
 Scripts to generate reference files for tests are stored in tests/data;
-a separate environment to rerun these locally can be found in `test_create_data_env.yml`.
+a separate environment to rerun these locally can be found in `environment-test-data.yml`.
 BioPhysConnectoR has to be installed separately.
 
 Example

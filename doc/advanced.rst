@@ -6,9 +6,11 @@ Advanced usage
 Adding or removing contacts between atoms
 -----------------------------------------
 Altering the contacts between two atom can be achieved using the
-:class:`PatchedForceField`.
-It wraps another :class:`ForceField` and applied custom changes to it.
-As example the contact between the first and second residue should be removed.
+:class:`PatchedForceField` or by modifying the model directly.
+
+The :class:`PatchedForceField` wraps another :class:`ForceField` and applied
+custom changes to it. As example the contact between the first and second
+residue should be removed.
 
 .. code-block:: python
 
@@ -18,6 +20,37 @@ As example the contact between the first and second residue should be removed.
     )
     anm = springcraft.ANM(atoms, ff)
 
+You can also achieve the same result by changing the model in place using
+:method:`modify_contact` and :method:`modify_atom`. This is significantly
+faster than recalculating the entire model from scratch. The same result
+as above can be achieved by running
+
+.. code-block:: python
+
+    ff = springcraft.InvariantForceField(cutoff_distance=13.0)
+    anm = springcraft.ANM(atoms, ff)
+    anm.modify_contact(0, 1, False)
+
+This is especially useful when you want to chain multiple modifications
+together.
+
+
+Normal Mode Analysis of Small Perturbation
+------------------------------------------
+It is also possible to get results for Normal Mode Analysis without changing
+the model and only doing the least amount of calculations necessary to calculate
+the modified results.
+
+The calculation of the mean square fluctuations for all modes for example requires
+only the diagonal elements of the covariance matrix. Instead of recalculating or
+modifying the whole covariance matrix, the specialised logic only calculates the
+change to the diagonal using significantly less resources.
+
+.. code-block:: python
+
+    ff = springcraft.InvariantForceField(cutoff_distance=13.0)
+    anm = springcraft.ANM(atoms, ff)
+    anm.mean_square_fluctuation_update(0, 1, False)
 
 
 Defining a custom force field
@@ -62,7 +95,7 @@ For the purpose of an example a chimeric force field is created
                 self._type_ff(atom_i, atom_j, sq_distance) *
                 self._dist_ff(atom_i, atom_j, sq_distance)
             )
-        
+
         @property
         def natoms(self):
             return self._type_ff.natoms
