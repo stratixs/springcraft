@@ -89,7 +89,7 @@ class ENMUpdate(ENM):
             An Atom may result in a change to the `ForceField`.
 
         Raises
-        -----
+        ------
         AttributeError
             If the `interaction` matrix does not exist.
         IndexError
@@ -170,11 +170,11 @@ class ENMUpdate(ENM):
             raise AttributeError("Interaction matrix must exist.")
         if atom_i < 0 or atom_i >= self._natoms:
             raise IndexError(
-                f"atom_i={atom_i} is out of bounds for structure of length {self._natoms}."
+                f"{atom_i} is out of bounds for structure of length {self._natoms}."
             )
         if atom_j < 0 or atom_j >= self._natoms:
             raise IndexError(
-                f"atom_j={atom_j} is out of bounds for structure of length {self._natoms}."
+                f"{atom_j} is out of bounds for structure of length {self._natoms}."
             )
         if atom_i == atom_j:
             raise IndexError("Cannot modify contact with itself.")
@@ -365,7 +365,7 @@ class ENMUpdate(ENM):
         )
 
     def _default_ger(self, alpha: float, x: np.ndarray, y: np.ndarray):
-        ger(alpha, x, y, a=self._covariance.T, overwrite_a=True)  # pyright: ignore[reportCallIssue]
+        ger(alpha, x, y, a=self._covariance.T, overwrite_a=True)
 
     def frequencies_update(
         self,

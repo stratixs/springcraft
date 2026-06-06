@@ -11,17 +11,16 @@ jobs:
     name: Build source distribution
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Install poetry
-        run: pipx install poetry
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: "poetry"
+      - name: Install poetry
+        run: pip install poetry
       - name: Build sdist
         run: poetry build --format sdist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-sdist
           path: dist/*.tar.gz
@@ -31,13 +30,22 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        # Build on Linux, Windows, and macOS (Intel & Apple Silicon)
-        os: [ubuntu-latest, windows-latest, macos-13, macos-14]
+        # macos-15-intel is an Intel runner, macos-14 is Apple silicon
+        os:
+          [
+            ubuntu-latest,
+            ubuntu-24.04-arm,
+            windows-latest,
+            windows-11-arm,
+            macos-15-intel,
+            macos-14,
+          ]
     steps:
-      - uses: actions/checkout@v4
-      - name: Build wheels
-        uses: pypa/cibuildwheel@v2.16.5
-      - uses: actions/upload-artifact@v4
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: pypa/cibuildwheel@v3.4.1
+      - uses: actions/upload-artifact@v7
         with:
           name: release-wheels-${{ matrix.os }}-${{ strategy.job-index }}
           path: ./wheelhouse/*.whl
@@ -49,21 +57,21 @@ jobs:
       run:
         shell: bash -l {0}
     steps:
-      - uses: actions/checkout@v4
-      - uses: conda-incubator/setup-miniconda@v3
+      - uses: actions/checkout@v6
+      - uses: conda-incubator/setup-miniconda@v4
         with:
-          activate-environment: springcraft-docs
-          auto-update-conda: true
-          python-version: "3.12"
+          miniforge-version: latest
           environment-file: environment-docs.yml
+          activate-environment: springcraft-docs
+          auto-activate: false
           mamba-version: "*"
       - name: Installing Springcraft
         run: pip install .
       - name: Building documentation
-        run: sphinx-build ./doc ./build/doc
+        run: sphinx-build doc build/doc
       - name: Zipping documentation
-        run: cd ./build; zip -r doc.zip doc; cd ..
-      - uses: actions/upload-artifact@v4
+        run: cd build; zip -r doc.zip doc; cd ..
+      - uses: actions/upload-artifact@v7
         with:
           name: release-doc
           path: build/doc.zip
@@ -82,7 +90,7 @@ jobs:
       name: publish
       url: https://pypi.org/project/springcraft/
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: release-*
           merge-multiple: true

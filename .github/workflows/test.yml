@@ -2,15 +2,19 @@ name: Testing Springcraft
 
 on: [push, pull_request]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     name: Check code style
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: "3.11"
       - name: Install ruff
         run: pip install ruff==0.9.7
       - name: Check code formatting
@@ -31,14 +35,16 @@ jobs:
         shell: bash -l {0}
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: conda-incubator/setup-miniconda@v3
+      - uses: actions/checkout@v6
+      - name: Setup conda
+        uses: conda-incubator/setup-miniconda@v4
         with:
+          environment-file: environment.yml
           activate-environment: springcraft-dev
-          auto-update-conda: true
-          python-version: "3.12"
+          auto-activate: false
+          mamba-version: "*"
       - name: Installing dependencies
-        run: conda install -c conda-forge poetry pytest
+        run: mamba install pytest
       - name: Building distribution
         run: poetry build -f wheel
       - name: Installing distribution

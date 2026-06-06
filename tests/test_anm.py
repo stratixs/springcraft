@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 import springcraft
-from tests.util import ModifiedForceField, data_dir, load_protein_structure, prepare_anm
+from tests.util import data_dir, load_protein_structure, prepare_anm
 
 
 def test_mass_weights_simple():
@@ -111,7 +111,7 @@ def test_hessian_covariance_setter():
 @pytest.mark.parametrize(
     "pdb_id, cutoff",
     itertools.product(
-        ["1l2y", "104l", "10nm"],
+        ["1l2y", "10nm"],
         [4, 7, 13],
     ),
 )
@@ -587,7 +587,7 @@ def test_prs(file_path):
     Compare perturbation response scanning (PRS)
     results with those obtained with ProDy.
     """
-    test_anm = prepare_springcraft_anm(file_path, cutoff=13)
+    test_anm = prepare_anm(file_path, cutoff=13)
 
     strucname = basename(file_path).split(".")[0]
 

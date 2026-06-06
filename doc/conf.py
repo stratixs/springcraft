@@ -86,8 +86,7 @@ sphinx_gallery_conf = {
     "gallery_dirs": "examples/gallery",
     "filename_pattern": "",
     "download_all_examples": False,
-    # Never report run time
-    "min_reported_time": sys.maxsize,
+    "write_computation_times": False,
     "image_scrapers": (
         "matplotlib",
         scraper.pymol_scraper,

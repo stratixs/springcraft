@@ -653,7 +653,7 @@ class TabulatedForceField(ForceField):
         """
         if atom_i < 0 or atom_i >= self._natoms:
             raise IndexError(
-                f"Atom i {atom_i} is out of bounds for a structure of length {self._natoms}"
+                f"{atom_i} is out of bounds for a structure of length {self._natoms}"
             )
 
         matrix_index = AA_TO_INDEX[new_atom.res_name]

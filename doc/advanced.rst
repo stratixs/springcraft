@@ -21,7 +21,7 @@ residue should be removed.
     anm = springcraft.ANM(atoms, ff)
 
 You can also achieve the same result by changing the model in place using
-:method:`modify_contact` and :method:`modify_atom`. This is significantly
+:meth:`modify_contact` and :meth:`modify_atom`. This is significantly
 faster than recalculating the entire model from scratch. The same result
 as above can be achieved by running
 

@@ -43,12 +43,12 @@ packages = [
     { include = "springcraft", from = "src" },
 ]
 include = [
-    { path = "package/**/*.so", format = "wheel" },
+    { path = "src/springcraft/**/*.so", format = "wheel" },
 ]
 
 [tool.cibuildwheel]
 build = ["cp311-*", "cp312-*", "cp313-*"]
-skip = ["pp*"]
+test-command = "python -c \"import springcraft; from springcraft.utils import eigen_update; print('Smoke test valid')\""
 
 [tool.poetry.build]
 script = "scripts/build-extension.py"

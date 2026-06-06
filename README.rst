@@ -67,7 +67,7 @@ documentation html with sphinx run
 
 .. code-block:: console
 
-   $ sphinx-build -E -a -b html doc doc/build/html
+   $ sphinx-build  doc build/doc
 
 Scripts to generate reference files for tests are stored in tests/data;
 a separate environment to rerun these locally can be found in `environment-test-data.yml`.
