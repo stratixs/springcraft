@@ -32,17 +32,17 @@ jobs:
 
     defaults:
       run:
-        shell: bash -l {0}
+        shell: bash -el {0}
 
     steps:
       - uses: actions/checkout@v6
-      - name: Setup conda
-        uses: conda-incubator/setup-miniconda@v4
+      - uses: conda-incubator/setup-miniconda@v4
         with:
+          miniforge-version: latest
+          mamba-version: "*"
           environment-file: environment.yml
           activate-environment: springcraft-dev
-          auto-activate: false
-          mamba-version: "*"
+          cache-environment: true
       - name: Installing dependencies
         run: mamba install pytest
       - name: Building distribution
