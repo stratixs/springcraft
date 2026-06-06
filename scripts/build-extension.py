@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
+import platform
 import shutil
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -9,10 +11,15 @@ from Cython.Build import cythonize
 from setuptools import Distribution, Extension
 from setuptools.command.build_ext import build_ext
 
-COMPILE_ARGS = ["-O3"]
+if sys.platform == "win32":
+    COMPILE_ARGS = ["/O2"]
+else:
+    COMPILE_ARGS = ["-O3", "-march=native"]
+    if platform.machine().lower() in ["x86_64", "amd64", "x86"]:
+        COMPILE_ARGS.extend(["-msse", "-msse2", "-mfma", "-mfpmath=sse"])
 LINK_ARGS = []
 INCLUDE_DIRS = [np.get_include()]
-LIBRARIES = ["m"]
+LIBRARIES = [] if sys.platform == "win32" else ["m"]
 
 
 def build() -> None:
