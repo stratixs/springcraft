@@ -162,7 +162,7 @@ class PatchedForceField(ForceField):
     force_field : ForceField
         The base force field.
         For all atoms pairs, that are not patched, the force
-        constant from the base force field is taken
+        constant from the base force field is taken.
     contact_shutdown : arraylike, shape=(n,), dtype=float, optional
         Indices that point to atoms, whose contacts to all other
         atoms are artificially switched off.
@@ -457,35 +457,25 @@ class TabulatedForceField(ForceField):
         Must contain only ``CA`` atoms and only canonic amino acids.
         ``CA`` atoms with the same chain ID and adjacent residue IDs
         are treated as bonded.
-    bonded, intra_chain, inter_chain : float or ndarray, shape=(k,) or
-        shape=(20, 20) or shape=(20, 20, k), dtype=float
-        The force constants for interactions between each combination of
-        amino acid type and for each distance bin.
-        The order of amino acids is alphabetically with respect to the
-        one-letter code, i.e.
-        ``'ALA'``, ``'CYS'``, ``'ASP'``, ``'GLU'``, ``'PHE'``,
-        ``'GLY'``, ``'HIS'``, ``'ILE'``, ``'LYS'``, ``'LEU'``,
-        ``'MET'``, ``'ASN'``, ``'PRO'``, ``'GLN'``, ``'ARG'``,
-        ``'SER'``, ``'THR'``, ``'VAL'``, ``'TRP'`` and ``'TYR'``.
-        `bonded` gives values for bonded amino acids,
-        `intra_chain` gives values for non-bonded interactions within
-        the same peptide chain and
-        `inter_chain` gives values for non-bonded interactions for amino
-        acids in different chains.
+    bonded : float or ndarray, shape=(k,) or shape=(20, 20) or shape=(20, 20, k), dtype=float
+        The force constant for interactions between bonded amino acids
+        and for each distance bin.
         The possible shapes are:
 
-            - Scalar value:
-              Same value for all amino acid types and distances.
-            - 1-dim array:
-              Individual value for each distance bin.
-            - 2-dim array:
-              Individual value for each pair of amino acid types.
-              Note the alphabetical order shown above.
-            - 3-dim array:
-              Individual value for each distance bin and pair of amino
-              acid types.
+            - Scalar value: Same value for all types and distances.
+            - 1-dim array: Individual value for each distance bin.
+            - 2-dim array: Individual value for each pair of amino acid types.
+            - 3-dim array: Individual value per distance bin and pair of types.
 
         The quadratic layers of the matrizes must be symmetric.
+    intra_chain : float or ndarray, shape=(k,) or shape=(20, 20) or shape=(20, 20, k), dtype=float
+        The force constant for non-bonded interactions within the same
+        peptide chain and for each distance bin.
+        Same shape options as `bonded`.
+    inter_chain : float or ndarray, shape=(k,) or shape=(20, 20) or shape=(20, 20, k), dtype=float
+        The force constant for non-bonded interactions between amino acids
+        in different chains and for each distance bin.
+        Same shape options as `bonded`.
 
     cutoff_distance : float or None or ndarray, shape=(k), dtype=float
         If no distance dependent values are given for `bonded`,
@@ -509,7 +499,7 @@ class TabulatedForceField(ForceField):
         *k* is the number of distance bins. Otherwise, *k = 1*.
         This is not a copy, modifications on this array affect the force
         field.
-    """
+    """  # noqa: E501
 
     def __init__(
         self,
@@ -642,9 +632,9 @@ class TabulatedForceField(ForceField):
         Parameters
         ----------
         atom_i : int
-            The atom to modify
-        Atom : Atom
-            The changed atom
+            The atom to modify.
+        new_atom : Atom
+            The changed atom.
 
         Returns
         -------
@@ -1045,6 +1035,7 @@ class TabulatedForceField(ForceField):
 
 
 def _convert_to_matrix(value: float | np.ndarray, n_bins: int) -> np.ndarray:
+    # numpydoc ignore=PR01,RT01
     """
     Perform checks on input interactions matrices and return consistent
     3D matrix.
@@ -1090,6 +1081,7 @@ def _convert_to_matrix(value: float | np.ndarray, n_bins: int) -> np.ndarray:
 
 
 def _check_matrix(matrix: np.ndarray) -> None:
+    # numpydoc ignore=PR01
     """
     Check matrix on number of elements and symmetry.
     """

@@ -64,7 +64,7 @@ def frequencies(enm) -> np.ndarray:
     Parameters
     ----------
     enm : ENM
-        Elastic network model
+        Elastic network model.
 
     Returns
     -------
@@ -80,7 +80,7 @@ def frequencies(enm) -> np.ndarray:
 
     See Also
     --------
-    springcraft.enm.ENM.eigen : Eigenvalue calculation
+    springcraft.enm.ENM.eigen : Eigenvalue calculation.
 
     Notes
     -----
@@ -88,7 +88,6 @@ def frequencies(enm) -> np.ndarray:
     calculated as
 
     .. math:: f_i = \\frac{1}{2 \\pi \\sqrt{\\lambda_i}}
-
     """
     from springcraft.enm import ENM
 
@@ -153,7 +152,7 @@ def mean_square_fluctuation(
     See Also
     --------
     springcraft.enm.ENM : Regarding the `covariance` attribute.
-    springcraft.enm.ENM.eigen : Eigenvalue calculation
+    springcraft.enm.ENM.eigen : Eigenvalue calculation.
     """
     from springcraft.enm import ENM
 
@@ -221,7 +220,7 @@ def bfactor(
 
     See Also
     --------
-    mean_square_fluctuation : The msqf calculation
+    mean_square_fluctuation : The msqf calculation.
 
     Notes
     -----
@@ -229,7 +228,6 @@ def bfactor(
     calculated as
 
     .. math:: b_i = \\frac{8 \\pi^2}{3} m_i
-
     """
     msqf = mean_square_fluctuation(enm, mode_subset, tem, tem_factors)
     b_factors = ((8 * np.pi**2) * msqf) / 3
@@ -473,9 +471,9 @@ def prs(anm, norm: bool = True) -> np.ndarray:
     ----------
     anm : ANM
         Instance of ANM object.
-    norm: bool, optional
-        Normalize by the self perturbation-response of the perturbed
-        ANM node.
+    norm : bool, optional
+        Normalize by the self perturbation-response of the perturbed ANM node.
+        The default is ``True``.
 
     Returns
     -------

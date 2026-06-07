@@ -7,9 +7,11 @@ __name__ = "springcraft"
 __author__ = "Patrick Kunzmann, Faisal Islam, Raphael Sutter"
 __all__ = ["GNM"]
 
+from typing import Literal, Union, overload
+
 import biotite.structure as struc
 import numpy as np
-from typing_extensions import Literal, Union, overload, override
+from typing_extensions import override
 
 from springcraft.enm_update import ENMUpdate
 from springcraft.forcefield import ForceField
@@ -76,7 +78,6 @@ class GNM(ENMUpdate):
 
         \\Gamma = \\Gamma \\cdot \\zeta \\cdot \\Gamma \\\\
         \\zeta = \\zeta \\cdot \\Gamma \\cdot \\zeta
-
     """
 
     _kirchhoff: np.ndarray | None
@@ -180,11 +181,11 @@ class GNM(ENMUpdate):
             ):
                 # TODO ff contact_pair_on
                 delta = self._kirchhoff[atom_i, atom_j]
-                delta += self._ff.force_constant(  # pyright: ignore[reportAssignmentType]
+                delta += self._ff.force_constant(
                     np.atleast_1d(atom_i),
                     np.atleast_1d(atom_j),
                     np.atleast_1d(sq_dist),
-                )
+                )[0]
 
         if np.abs(delta) < 1e-10:
             raise ValueError("No change in interaction strength.")

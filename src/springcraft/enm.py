@@ -8,11 +8,11 @@ __author__ = "Raphael Sutter"
 __all__ = ["ENM"]
 
 from abc import ABC, abstractmethod
+from typing import Literal, Union, overload
 
 import biotite.structure as struc
 import biotite.structure.info as strucinfo
 import numpy as np
-from typing_extensions import Literal, Union, overload
 
 from springcraft import nma
 from springcraft.forcefield import ForceField
@@ -212,7 +212,7 @@ class ENM(ABC):
             Eigenvectors of the matrix, one per row. ``eig_values[i]`` corresponds to
             ``eig_vectors[i]``.
         eigen_n_zero : int, optional
-            The number of the (first) zero eigenvalues. Only returned if `n_zero` is set
+            The number of the (first) zero eigenvalues. Only returned for `n_zero`.
 
         Warns
         -----
@@ -272,7 +272,7 @@ class ENM(ABC):
 
         See Also
         --------
-        springcraft.nma.frequencies : The frequency calculation
+        springcraft.nma.frequencies : The frequency calculation.
         """
         return nma.frequencies(self)
 
@@ -304,7 +304,7 @@ class ENM(ABC):
 
         See Also
         --------
-        springcraft.nma.mean_square_fluctuation : Mean square fluctuation calculation
+        springcraft.nma.mean_square_fluctuation : Mean square fluctuation calculation.
         """
         return nma.mean_square_fluctuation(self, mode_subset, tem, tem_factors)
 
@@ -337,7 +337,7 @@ class ENM(ABC):
 
         See Also
         --------
-        springcraft.nma.bfactor : The B-factor calculation
+        springcraft.nma.bfactor : The B-factor calculation.
         """
         return nma.bfactor(self, mode_subset, tem, tem_factors)
 
@@ -373,7 +373,7 @@ class ENM(ABC):
 
         See Also
         --------
-        springcraft.nma.dcc : The DCC calculation
+        springcraft.nma.dcc : The DCC calculation.
         """
         return nma.dcc(self, mode_subset, norm, tem, tem_factors)
 

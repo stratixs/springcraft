@@ -9,11 +9,11 @@ __author__ = "Raphael Sutter"
 __all__ = ["ENMUpdate"]
 
 from abc import abstractmethod
+from typing import Callable
 
 import biotite.structure as struc
 import numpy as np
 from scipy.linalg import blas
-from typing_extensions import Callable
 
 from springcraft import nma_update
 from springcraft.enm import ENM, K_B
@@ -34,26 +34,26 @@ class ENMUpdate(ENM):
         Parameters
         ----------
         atom_i, atom_j : int
-            Atom indices with ``atom_i != atom_j``
+            Atom indices with ``atom_i != atom_j``.
         delta : bool or int or float
             The change in interaction strength (``True``: reset, ``False``: set 0,
-            scalar: change by value)
+            scalar: change by value).
 
         Raises
         ------
         AttributeError
             If the `interaction` matrix does not exist.
         IndexError
-            If any index is out of bounds or the indices are the same
+            If any index is out of bounds or the indices are the same.
         ValueError
             If the resulting `delta` is (nearly) 0.
 
         See Also
         --------
         springcraft.enm_update.ENMUpdate.prepare_update :
-            More Information about the update parameters
+            More Information about the update parameters.
         springcraft.enm_update.ENMUpdate.covariance_update :
-            More information about the covariance update
+            More information about the covariance update.
         """
         slice_i, slice_j, slice_t, delta = self.prepare_update(atom_i, atom_j, delta)
 
@@ -100,7 +100,7 @@ class ENMUpdate(ENM):
         See Also
         --------
         springcraft.enm_update.ENMUpdate.covariance_update :
-            More information about the covariance update
+            More information about the covariance update.
         """
         if self._interactions is None:
             raise AttributeError("Interaction matrix must exist.")
@@ -125,7 +125,7 @@ class ENMUpdate(ENM):
         Parameters
         ----------
         atom_i, atom_j : int
-            Atom indices with ``atom_i != atom_j``
+            Atom indices with ``atom_i != atom_j``.
         delta : bool or int or float
             A bool value gets interpreted as a turn on/off signal.
             Turning on resets the contact interaction strength to the initial value.
@@ -135,18 +135,18 @@ class ENMUpdate(ENM):
         Returns
         -------
         slice_i, slice_j : slice
-            Index ranges (size k)
+            Index ranges (size k).
         slice_t : ndarray, shape(k,), dtype=float
-            Value(s) for the index range
+            Value(s) for the index range.
         delta : float
-            Permutation factor
+            Permutation factor.
 
         Raises
         ------
         AttributeError
             If the `interaction` matrix does not exist.
         IndexError
-            If any index is out of bounds or the indices are the same
+            If any index is out of bounds or the indices are the same.
         ValueError
             If the resulting `delta` is (nearly) 0.
 
@@ -164,7 +164,6 @@ class ENMUpdate(ENM):
         ... c[slice_i] = slice_t
             c[slice_j] = -slice_t
             interactions + delta * np.outer(c, c)
-
         """
         if self._interactions is None:
             raise AttributeError("Interaction matrix must exist.")
@@ -196,19 +195,18 @@ class ENMUpdate(ENM):
         Parameters
         ----------
         interactions : np.ndarray, shape(n,n), dtype=float
-            The interactions matrix to change
+            The interactions matrix to change.
         slice_i, slice_j : slice
-            Index ranges (size k)
+            Index ranges (size k).
         slice_t : ndarray, shape(k,), dtype=float
-            Value(s) for the index range
+            Value(s) for the index range.
         delta : float
-            Permutation factor
+            Permutation factor.
 
         See Also
         --------
         springcraft.enm_update.ENMUpdate.prepare_update :
-           More information about the update parameters
-
+           More information about the update parameters.
         """
         if slice_t is None:
             tensor = delta
@@ -246,20 +244,20 @@ class ENMUpdate(ENM):
         Parameters
         ----------
         interactions, covariance : np.ndarray, shape(n,n), dtype=float
-            The `interactions` and `covariance` matrix to change
+            The `interactions` and `covariance` matrix to change.
         slice_i, slice_j : slice
-            Index ranges (size k)
+            Index ranges (size k).
         slice_t : ndarray, shape(k,), dtype=float
-            Value(s) for the index range
+            Value(s) for the index range.
         delta : float
-            Permutation factor
+            Permutation factor.
         update : Callable
-            One-rank permutation to the covariance matrix
+            One-rank permutation to the covariance matrix.
 
         See Also
         --------
         springcraft.enm_update.ENMUpdate.prepare_update :
-           More information about the update parameters
+           More information about the update parameters.
 
         Notes
         -----
@@ -331,6 +329,7 @@ class ENMUpdate(ENM):
         slice_t: None | np.ndarray,
         delta: float,
     ):
+        # numpydoc ignore=PR01
         """
         Application of the `interactions_update` method to this
         model's interaction matrix.
@@ -350,6 +349,7 @@ class ENMUpdate(ENM):
         slice_t: None | np.ndarray,
         delta: float,
     ):
+        # numpydoc ignore=PR01
         """
         Application of the `covariance_update` method to this
         model's covariance matrix.
@@ -365,7 +365,7 @@ class ENMUpdate(ENM):
         )
 
     def _default_ger(self, alpha: float, x: np.ndarray, y: np.ndarray):
-        ger(alpha, x, y, a=self._covariance.T, overwrite_a=True)
+        ger(float(alpha), x, y, a=self._covariance.T, overwrite_a=True)
 
     def frequencies_update(
         self,
@@ -383,10 +383,10 @@ class ENMUpdate(ENM):
         Parameters
         ----------
         atom_i, atom_j : int
-            Atom indices with ``atom_i != atom_j``
+            Atom indices with ``atom_i != atom_j``.
         delta : bool or int or float
             The change in interaction strength (``True``: reset, ``False``: set 0,
-            scalar: change by value)
+            scalar: change by value).
 
         Returns
         -------
@@ -396,9 +396,9 @@ class ENMUpdate(ENM):
         See Also
         --------
         springcraft.enm_update.ENMUpdate.prepare_update :
-           More information about the update parameters
-        springcraft.nma.frequencies : The frequency calculation
-        springcraft.nma_update.frequencies_update : The frequency update
+           More information about the update parameters.
+        springcraft.nma.frequencies : The frequency calculation.
+        springcraft.nma_update.frequencies_update : The frequency update.
 
         Examples
         --------
@@ -430,10 +430,10 @@ class ENMUpdate(ENM):
         Parameters
         ----------
         atom_i, atom_j : int
-            Atom indices with ``atom_i != atom_j``
+            Atom indices with ``atom_i != atom_j``.
         delta : bool or int or float
             The change in interaction strength (``True``: reset, ``False``: set 0,
-            scalar: change by value)
+            scalar: change by value).
         mode_subset : ndarray, shape=(k,), dtype=int, optional
             Specifies the subset of modes considered in the computation.
         tem : float or int or None, optional
@@ -451,11 +451,11 @@ class ENMUpdate(ENM):
         See Also
         --------
         springcraft.enm_update.ENMUpdate.prepare_update :
-           More information about the update parameters
+           More information about the update parameters.
         springcraft.nma.mean_square_fluctuation :
-            The mean square fluctuation calculation
+            The mean square fluctuation calculation.
         springcraft.nma_update.mean_square_fluctuation_update :
-            The mean square fluctuation update
+            The mean square fluctuation update.
 
         Examples
         --------
@@ -489,10 +489,10 @@ class ENMUpdate(ENM):
         Parameters
         ----------
         atom_i, atom_j : int
-            Atom indices with ``atom_i != atom_j``
+            Atom indices with ``atom_i != atom_j``.
         delta : bool or int or float
             The change in interaction strength (``True``: reset, ``False``: set 0,
-            scalar: change by value)
+            scalar: change by value).
         mode_subset : ndarray, shape=(k,), dtype=int, optional
             Specifies the subset of modes considered in the computation.
         tem : float or int or None, optional
@@ -510,9 +510,9 @@ class ENMUpdate(ENM):
         See Also
         --------
         springcraft.enm_update.ENMUpdate.prepare_update :
-            More information about the update parameters
-        springcraft.nma.bfactor : The B-factor calculation
-        springcraft.nma_update.bfactor_update : The B-factor update
+            More information about the update parameters.
+        springcraft.nma.bfactor : The B-factor calculation.
+        springcraft.nma_update.bfactor_update : The B-factor update.
 
         Examples
         --------
@@ -547,10 +547,10 @@ class ENMUpdate(ENM):
         Parameters
         ----------
         atom_i, atom_j : int
-            Atom indices with ``atom_i != atom_j``
+            Atom indices with ``atom_i != atom_j``.
         delta : bool or int or float
             The change in interaction strength (``True``: reset, ``False``: set 0,
-            scalar: change by value)
+            scalar: change by value).
         mode_subset : ndarray, shape=(k,), dtype=int or None, optional
             Specifies the subset of modes considered in the computation.
             The default is ``None``.
@@ -572,9 +572,9 @@ class ENMUpdate(ENM):
         See Also
         --------
         springcraft.enm_update.ENMUpdate.prepare_update :
-            More information about the update parameters
-        springcraft.nma.dcc : The DCC calculation
-        springcraft.nma_update.dcc_update : The DCC update
+            More information about the update parameters.
+        springcraft.nma.dcc : The DCC calculation.
+        springcraft.nma_update.dcc_update : The DCC update.
 
         Examples
         --------

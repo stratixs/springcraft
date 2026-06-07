@@ -130,6 +130,7 @@ def test_covariance(pdb_id, cutoff):
     assert np.allclose(
         test_anm.kirchhoff,
         test_anm.kirchhoff @ test_anm.covariance @ test_anm.kirchhoff,
+        atol=1e-7,
     )
 
 

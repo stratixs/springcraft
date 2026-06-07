@@ -39,11 +39,13 @@ def frequencies_update(
 
     Parameters
     ----------
+    enm : ENMUpdate
+        Elastic network model.
     atom_i, atom_j : int
-        Atom indices with ``atom_i != atom_j``
+        Atom indices with ``atom_i != atom_j``.
     delta : bool or int or float
         The change in interaction strength (``True``: reset, ``False``: set 0,
-        scalar: change by value)
+        scalar: change by value).
 
     Returns
     -------
@@ -53,9 +55,9 @@ def frequencies_update(
     See Also
     --------
     springcraft.enm_update.ENMUpdate.prepare_update :
-        More information about the update parameters
-    springcraft.nma.frequencies : The frequency calculation
-    _calc_updated_eigen : More information about the eigenvalue update
+        More information about the update parameters.
+    springcraft.nma.frequencies : The frequency calculation.
+    _calc_updated_eigen : More information about the eigenvalue update.
 
     Examples
     --------
@@ -118,11 +120,13 @@ def mean_square_fluctuation_update(
 
     Parameters
     ----------
+    enm : ENMUpdate
+        Elastic network model.
     atom_i, atom_j : int
-        Atom indices with ``atom_i != atom_j``
+        Atom indices with ``atom_i != atom_j``.
     delta : bool or int or float
         The change in interaction strength (``True``: reset, ``False``: set 0,
-        scalar: change by value)
+        scalar: change by value).
     mode_subset : ndarray, shape=(k,), dtype=int, optional
         Specifies the subset of modes considered in the computation.
     tem : float or int or None, optional
@@ -140,11 +144,11 @@ def mean_square_fluctuation_update(
     See Also
     --------
     springcraft.enm_update.ENMUpdate.prepare_update :
-        More information about the update parameters
-    springcraft.nma.mean_square_fluctuation : Mean square fluctuation calculation
+        More information about the update parameters.
+    springcraft.nma.mean_square_fluctuation : Mean square fluctuation calculation.
     springcraft.enm_update.ENMUpdate.covariance_update :
-        More information about the covariance update
-    _calc_updated_eigen : More information about the eigenvalue update
+        More information about the covariance update.
+    _calc_updated_eigen : More information about the eigenvalue update.
 
     Examples
     --------
@@ -204,11 +208,13 @@ def bfactor_update(
 
     Parameters
     ----------
+    enm : ENMUpdate
+        Elastic network model.
     atom_i, atom_j : int
-        Atom indices with ``atom_i != atom_j``
+        Atom indices with ``atom_i != atom_j``.
     delta : bool or int or float
         The change in interaction strength (``True``: reset, ``False``: set 0,
-        scalar: change by value)
+        scalar: change by value).
     mode_subset : ndarray, shape=(k,), dtype=int, optional
         Specifies the subset of modes considered in the computation.
     tem : float or int or None, optional
@@ -226,10 +232,10 @@ def bfactor_update(
     See Also
     --------
     springcraft.enm_update.ENMUpdate.prepare_update :
-        More information about the update parameters
-    springcraft.nma.bfactor : The B-factor calculation
+        More information about the update parameters.
+    springcraft.nma.bfactor : The B-factor calculation.
     springcraft.nma_update.mean_square_fluctuation_update :
-        The mean square fluctuation update
+        The mean square fluctuation update.
 
     Examples
     --------
@@ -274,11 +280,13 @@ def dcc_update(
 
     Parameters
     ----------
+    enm : ENMUpdate
+        Elastic network model.
     atom_i, atom_j : int
-        Atom indices with ``atom_i != atom_j``
+        Atom indices with ``atom_i != atom_j``.
     delta : bool or int or float
         The change in interaction strength (``True``: reset, ``False``: set 0,
-        scalar: change by value)
+        scalar: change by value).
     mode_subset : ndarray, shape=(k,), dtype=int or None, optional
         Specifies the subset of modes considered in the computation.
         The default is ``None``.
@@ -300,11 +308,11 @@ def dcc_update(
     See Also
     --------
     springcraft.enm_update.ENMUpdate.prepare_update :
-        More information about the update parameters
-    springcraft.nma.dcc : The DCC calculation
+        More information about the update parameters.
+    springcraft.nma.dcc : The DCC calculation.
     springcraft.enm_update.ENMUpdate.covariance_update :
-       More information about the covariance update
-    _calc_updated_eigen : More information about the eigenvalue update
+       More information about the covariance update.
+    _calc_updated_eigen : More information about the eigenvalue update.
 
     Examples
     --------
@@ -325,7 +333,7 @@ def dcc_update(
 
         def dcc_update_fnc(alpha, x, y):
             nonlocal dcc_update
-            ger(alpha, x, y, a=dcc_update.T, overwrite_a=True)
+            ger(float(alpha), x, y, a=dcc_update.T, overwrite_a=True)
 
         enm.covariance_update(
             enm._interactions,
@@ -384,12 +392,12 @@ def _calc_updated_eigen(
     Parameters
     ----------
     enm : ENMUpdate
-        Elastic network model
+        Elastic network model.
     atom_i, atom_j : int
-        Atom indices with ``atom_i != atom_j``
+        Atom indices with ``atom_i != atom_j``.
     delta : bool or int or float
         The change in interaction strength (``True``: reset, ``False``: set 0,
-        scalar: change by value)
+        scalar: change by value).
     mode_subset : ndarray, shape=(k,), dtype=int, optional
         Specifies the subset of modes considered in the computation.
 
@@ -408,7 +416,7 @@ def _calc_updated_eigen(
     See Also
     --------
     springcraft.enm_update.ENMUpdate.prepare_update :
-        More information about the update parameters
+        More information about the update parameters.
 
     Notes
     -----

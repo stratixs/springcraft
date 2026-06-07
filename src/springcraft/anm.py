@@ -7,9 +7,11 @@ __name__ = "springcraft"
 __author__ = "Patrick Kunzmann, Raphael Sutter"
 __all__ = ["ANM"]
 
+from typing import Literal, Union, overload
+
 import biotite.structure as struc
 import numpy as np
-from typing_extensions import Literal, Union, overload, override
+from typing_extensions import override
 
 from springcraft import nma
 from springcraft.enm_update import ENMUpdate
@@ -77,7 +79,6 @@ class ANM(ENMUpdate):
 
         \\Gamma = \\Gamma \\cdot \\zeta \\cdot \\Gamma \\\\
         \\zeta = \\zeta \\cdot \\Gamma \\cdot \\zeta
-
     """
 
     _hessian: np.ndarray | None
@@ -299,7 +300,6 @@ class ANM(ENMUpdate):
             "Protein Structural Change Upon Ligand Binding:
             Linear Response Theory."
             Phys Rev Lett. 94, 7, 078102 (2005).
-
         """
         return nma.linear_response(self, force)
 
@@ -330,7 +330,7 @@ class ANM(ENMUpdate):
 
         Parameters
         ----------
-        norm: bool, optional
+        norm : bool, optional
             Normalize by the self perturbation-response of the perturbed
             ANM node.
 

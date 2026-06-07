@@ -1,37 +1,24 @@
-[build-system]
-requires = [
-    "poetry-core>=1.0.0",
-    "setuptools >= 82.0.0",
-    "cython>=3.0",
-    "numpy>=1.25",
-    "scipy>=1.9",
-]
-build-backend = "poetry.core.masonry.api"
-
-[tool.poetry]
+[project]
 name = "springcraft"
-version = "0.3.0"
+version = "0.4.0"
 description = "Investigate molecular dynamics with elastic network models"
 readme = "README.rst"
+requires-python = ">=3.11,<4.0"
 license = "BSD-3-Clause"
 authors = [
-    "Patrick Kunzmann <padix.key@gmail.com>",
-    "Jan Krumbach <jhkr@web.de>",
-    "Faisal Islam <faisalislam98@yahoo.de>"
+    { name = "Patrick Kunzmann", email = "padix.key@gmail.com" },
+    { name = "Jan Krumbach", email = "jhkr@web.de" },
+    { name = "Faisal Islam", email = "faisalislam98@yahoo.de" },
 ]
-homepage = "https://springcraft.biotite-python.org"
-repository = "https://github.com/biotite-dev/springcraft"
-documentation = "https://springcraft.biotite-python.org"
 keywords = [
     "Bioinformatics",
     "Computational biology",
     "Elastic network models",
-    "Normal mode analysis"
+    "Normal mode analysis",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: BSD License",
     "Natural Language :: English",
     "Operating System :: POSIX :: Linux",
     "Operating System :: MacOS",
@@ -39,31 +26,102 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
-packages = [
-    { include = "springcraft", from = "src" },
+dependencies = [
+    "biotite>=1.0",
+    "numpy>=1.25",
+    "scipy>=1.9",
+    "typing_extensions>=4.0",
 ]
-include = [
-    { path = "src/springcraft/**/*.so", format = "wheel" },
+
+[project.optional-dependencies]
+dev = [
+    "cython>=3.0",
+]
+lint = [
+    "ruff==0.15.16",
+]
+test =[
+    "pytest",
+    "pytest-cov",
+]
+docs = [
+    "sphinx>=7.0",
+    "sphinx-gallery>=0.17.0",
+    "matplotlib>=3.7",
+    "numpydoc==1.8.0",
+    "jinja2>=3.1",
+    "ammolite>=0.8",
 ]
 
-[tool.cibuildwheel]
-build = ["cp311-*", "cp312-*", "cp313-*"]
-test-command = "python -c \"import springcraft; from springcraft.utils import eigen_update; print('Smoke test valid')\""
+[project.urls]
+Homepage = "https://springcraft.biotite-python.org"
+Repository = "https://github.com/biotite-dev/springcraft"
+Documentation = "https://springcraft.biotite-python.org"
 
-[tool.poetry.build]
-script = "scripts/build-extension.py"
+# ---- BUILD SYSTEM ----
 
-[tool.poetry.dependencies]
-python = ">=3.11,<4.0"
-biotite = ">=1.0"
-numpy = ">=1.25"
-scipy = ">=1.9"
+[build-system]
+requires = [
+    "hatchling>=1.30",
+    "hatch-cython>=0.6",
+    "setuptools>=82.0",
+    "cython>=3.0",
+    "numpy>=2.0",
+    "scipy>=1.12",
+]
+build-backend = "hatchling.build"
 
-[tool.poetry.group.dev.dependencies]
-pytest = ">=8.0"
-pytest-cov = ">=7.1.0"
-ruff = "==0.9.7"
-cython = ">=3.0"
+[tool.hatch.build.targets.wheel]
+packages = ["src/springcraft"]
+
+[tool.hatch.build.targets.wheel.hooks.cython]
+dependencies = ["hatch-cython"]
+
+[tool.hatch.build.targets.wheel.hooks.cython.options]
+directives = { binding = true, language_level = 3 }
+include_numpy = true
+compile_py = false
+language = "c++"
+define_macros = [
+    ["NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION"],
+]
+compile_args = [
+    { platforms = ["windows"], arg = "/O2" },
+    { platforms = ["linux", "darwin", "freebsd"], arg = "-O3" },
+    { platforms = ["linux", "darwin", "freebsd"], arg = "-march=native" },
+    { platforms = ["linux", "darwin", "freebsd"], arch = ["x86_64", "amd64", "x86"], arg = "-msse" },
+    { platforms = ["linux", "darwin", "freebsd"], arch = ["x86_64", "amd64", "x86"], arg = "-msse2" },
+    { platforms = ["linux", "darwin", "freebsd"], arch = ["x86_64", "amd64", "x86"], arg = "-mfma" },
+    { platforms = ["linux", "darwin", "freebsd"], arch = ["x86_64", "amd64", "x86"], arg = "-mfpmath=sse" }
+]
+extra_link_args = [
+    { platforms = ["linux", "darwin", "freebsd"], arg = "-lm" }
+]
+
+# ---- SCRIPTS ----
+
+[tool.hatch.envs.lint]
+features = ["lint"]
+
+[tool.hatch.envs.lint.scripts]
+run = "ruff check ."
+
+[tool.hatch.envs.test]
+features = ["dev", "test"]
+
+[tool.hatch.envs.test.scripts]
+run = "pytest {args}"
+cov = "pytest --cov=springcraft --cov-report=html --cov-branch {args}"
+
+[tool.hatch.envs.docs]
+features = ["dev", "docs"]
+
+[tool.hatch.envs.docs.scripts]
+all = ["lint", "build"]
+lint = "python -m numpydoc lint src/springcraft/*.py"
+build = "sphinx-build doc build/doc"
+
+# ---- LINTING ----
 
 [tool.ruff.lint]
 # pyflakes, pycodestyle isort and variable naming
@@ -71,15 +129,9 @@ select = ["F", "E", "W", "I", "TID", "N"]
 ignore = [
     # camel cases for forcefields
     "N802",
-    # eANM/sdENM as static methods of TabulatedForceField
-    # should not accept "self" as argument by design
-    "N805",
     # Due to constants used in functions
     "N806",
 ]
-
-[tool.ruff.lint.pydocstyle]
-convention = "numpy"
 
 [tool.ruff.lint.per-file-ignores]
 # Due to `from .module import *` imports in `__init__.py` modules
@@ -88,8 +140,31 @@ convention = "numpy"
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
 
-[tool.ruff.lint.isort]
-known-first-party = ["springcraft"]
+[tool.numpydoc_validation]
+checks = [
+    "all",
+    # ... except:
+    "GL08",  # Properties do not have a docstring
+    "SS03",  # Sometimes the citation comes after the period
+    "SS05",  # Too error-prone; classes do not use infinite verbs
+    "SS06",  # Sometimes summaries are a bit longer
+    "ES01",  # Some functions are simple enough to not need an extended summary
+    "PR06",  # The types are quite descriptive (include shape, dtype, etc.)
+    "RT02",  # In Biotite all return values have names
+    # Intentionally not all docstrings contain these sections
+    "YD01",
+    "SA01",
+    "EX01",
+]
+exclude_files = [
+    "tests/.*",
+    "doc/.*"
+]
+exclude = [
+    "\\.__.*__$",
+]
+
+# ---- TEST ----
 
 [tool.pytest.ini_options]
 # Pytest: Ignore Python scripts for reference data creation
