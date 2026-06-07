@@ -70,7 +70,7 @@ jobs:
       - uses: conda-incubator/setup-miniconda@v4
         with:
           miniforge-version: latest
-          environment-file: environment-docs.yml
+          environment-file: environment.yml
           activate-environment: springcraft-docs
           mamba-version: "*"
       - name: Installing Springcraft
