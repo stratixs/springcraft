@@ -41,9 +41,15 @@ def test_modify_contact():
     assert test_gnm._covariance is not None
 
     # arbitrary delta with rank unchanged
-    test_gnm.modify_contact(4, 8, 2)
-    ref_ff = ModifiedForceField(ff, len(ca), 4, 8, 2)
+    test_gnm.modify_contact(2, 8, 2)
+    ref_ff = ModifiedForceField(ff, len(ca), 2, 8, 2)
     ref_gnm = springcraft.GNM(ca, ref_ff)
+    assert np.allclose(test_gnm.kirchhoff, ref_gnm.kirchhoff)
+    assert np.allclose(test_gnm.covariance, ref_gnm.covariance)
+
+    # reset arbitrary change
+    test_gnm.modify_contact(2, 8, True)
+    ref_gnm = springcraft.GNM(ca, ff)
     assert np.allclose(test_gnm.kirchhoff, ref_gnm.kirchhoff)
     assert np.allclose(test_gnm.covariance, ref_gnm.covariance)
 
@@ -115,6 +121,7 @@ def test_modify_atom():
     assert np.allclose(test_gnm.covariance, ref_gnm.covariance)
 
     # turn on
+    test_gnm.modify_contact(2, 8, 2)  # random change that needs to be reset to 0
     test_gnm.modify_atom(8, True)
     ref_gnm = springcraft.GNM(ca, ff)
     assert np.allclose(test_gnm.kirchhoff, ref_gnm.kirchhoff)

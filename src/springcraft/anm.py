@@ -133,6 +133,8 @@ class ANM(ENMUpdate):
     def modify_atom(self, atom_i: int, new_atom: bool | struc.Atom):
         super().modify_atom(atom_i, new_atom)
 
+        # get current interaction strength
+        # the value in the hessian is negative so a change by that value sets to 0
         disp = self._coord - self._coord[atom_i]
         sq_disp = disp * disp
         sq_dist = np.sum(sq_disp, axis=1)
@@ -189,12 +191,12 @@ class ANM(ENMUpdate):
             delta = self._hessian[atom_i * self.dof, atom_j * self.dof] / comp
         elif delta is True:
             # turn on contact (reset to original value)
+            # set 0 than add original value
+            delta = self._hessian[atom_i * self.dof, atom_j * self.dof] / comp
             if (
                 self._ff.cutoff_distance is None
                 or sq_dist <= self._ff.cutoff_distance**2
             ):
-                # TODO ff contact_pair_on
-                delta = self._hessian[atom_i * self.dof, atom_j * self.dof] / comp
                 delta += self._ff.force_constant(
                     np.atleast_1d(atom_i),
                     np.atleast_1d(atom_j),

@@ -173,14 +173,14 @@ class GNM(ENMUpdate):
             delta = self._kirchhoff[atom_i, atom_j]
         elif delta is True:
             # turn on contact (reset to original value)
+            delta = self._kirchhoff[atom_i, atom_j]  # set 0, than add orignal value
+
             disp = self._coord[atom_j] - self._coord[atom_i]
             sq_dist = disp @ disp
             if (
                 self._ff.cutoff_distance is None
                 or sq_dist <= self._ff.cutoff_distance**2
             ):
-                # TODO ff contact_pair_on
-                delta = self._kirchhoff[atom_i, atom_j]
                 delta += self._ff.force_constant(
                     np.atleast_1d(atom_i),
                     np.atleast_1d(atom_j),

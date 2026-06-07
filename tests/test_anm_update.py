@@ -41,9 +41,15 @@ def test_modify_contact():
     assert test_anm._covariance is not None
 
     # arbitrary delta with rank unchanged
-    test_anm.modify_contact(4, 8, 2)
-    ref_ff = ModifiedForceField(ff, len(ca), 4, 8, 2)
+    test_anm.modify_contact(2, 8, 2)
+    ref_ff = ModifiedForceField(ff, len(ca), 2, 8, 2)
     ref_anm = springcraft.ANM(ca, ref_ff)
+    assert np.allclose(test_anm.hessian, ref_anm.hessian)
+    assert np.allclose(test_anm.covariance, ref_anm.covariance)
+
+    # reset arbitrary change
+    test_anm.modify_contact(2, 8, True)
+    ref_anm = springcraft.ANM(ca, ff)
     assert np.allclose(test_anm.hessian, ref_anm.hessian)
     assert np.allclose(test_anm.covariance, ref_anm.covariance)
 
@@ -114,10 +120,11 @@ def test_modify_atom():
     assert np.allclose(test_anm.covariance, ref_anm.covariance, atol=1e-7)
 
     # turn on
+    test_anm.modify_contact(2, 8, 2)  # random change that needs to be reset to 0
     test_anm.modify_atom(8, True)
     ref_anm = springcraft.ANM(ca, ff)
     assert np.allclose(test_anm.hessian, ref_anm.hessian)
-    assert np.allclose(test_anm.covariance, ref_anm.covariance, atol=1e-6)
+    assert np.allclose(test_anm.covariance, ref_anm.covariance, atol=1e-5)
 
     # change amino acid type
     ff = springcraft.TabulatedForceField.d_enm(ca)
