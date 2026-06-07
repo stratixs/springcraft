@@ -56,7 +56,7 @@ changes are synced directly.
 
    $ mamba env create -f environment.yml
    $ mamba activate springcraft-dev
-   $ pip install -e .[dev]
+   $ pip install -e .
 
 Linting is done by `ruff` and tests are resolved by `pytest`. After installing the
 dependencies into the conda env you can run them by

@@ -74,7 +74,7 @@ jobs:
           activate-environment: springcraft-docs
           mamba-version: "*"
       - name: Installing Springcraft
-        run: pip install .
+        run: pip install .[docs]
       - name: Building documentation
         run: sphinx-build doc build/doc
       - name: Zipping documentation

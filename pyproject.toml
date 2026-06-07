@@ -34,9 +34,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = [
-    "cython>=3.0",
-]
 lint = [
     "ruff==0.15.16",
 ]
@@ -107,14 +104,14 @@ features = ["lint"]
 run = "ruff check ."
 
 [tool.hatch.envs.test]
-features = ["dev", "test"]
+features = ["test"]
 
 [tool.hatch.envs.test.scripts]
 run = "pytest {args}"
 cov = "pytest --cov=springcraft --cov-report=html --cov-branch {args}"
 
 [tool.hatch.envs.docs]
-features = ["dev", "docs"]
+features = ["docs"]
 
 [tool.hatch.envs.docs.scripts]
 all = ["lint", "build"]
