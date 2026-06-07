@@ -1,12 +1,14 @@
 # Coda environment to facilitate Biotite development process.
-# After creating the environment install the required packages with
-#   poetry config virtualenvs.create false
-#   poetry install
 name: springcraft-dev
 
 channels:
   - conda-forge
 
 dependencies:
-  - poetry
-  - python=3.11
+  - python=3.12
+  - hatch
+  # project dependencies
+  - biotite>=1.6
+  - numpy>=2.0
+  # docs dependencies
+  - pymol-open-source>=3.1

@@ -41,9 +41,15 @@ def test_modify_contact():
     assert test_gnm._covariance is not None
 
     # arbitrary delta with rank unchanged
-    test_gnm.modify_contact(4, 8, 2)
-    ref_ff = ModifiedForceField(ff, len(ca), 4, 8, 2)
+    test_gnm.modify_contact(2, 8, 2)
+    ref_ff = ModifiedForceField(ff, len(ca), 2, 8, 2)
     ref_gnm = springcraft.GNM(ca, ref_ff)
+    assert np.allclose(test_gnm.kirchhoff, ref_gnm.kirchhoff)
+    assert np.allclose(test_gnm.covariance, ref_gnm.covariance)
+
+    # reset arbitrary change
+    test_gnm.modify_contact(2, 8, True)
+    ref_gnm = springcraft.GNM(ca, ff)
     assert np.allclose(test_gnm.kirchhoff, ref_gnm.kirchhoff)
     assert np.allclose(test_gnm.covariance, ref_gnm.covariance)
 
@@ -115,6 +121,7 @@ def test_modify_atom():
     assert np.allclose(test_gnm.covariance, ref_gnm.covariance)
 
     # turn on
+    test_gnm.modify_contact(2, 8, 2)  # random change that needs to be reset to 0
     test_gnm.modify_atom(8, True)
     ref_gnm = springcraft.GNM(ca, ff)
     assert np.allclose(test_gnm.kirchhoff, ref_gnm.kirchhoff)
@@ -129,7 +136,7 @@ def test_modify_atom():
     assert np.allclose(test_gnm.covariance, ref_gnm.covariance)
 
 
-def test_msqf_pert():
+def test_msqf_update():
     ca = load_protein_structure("1l2y")
     ff = springcraft.InvariantForceField(7.0)
 
@@ -137,20 +144,18 @@ def test_msqf_pert():
     test_gnm = springcraft.GNM(ca, ff)
     test_gnm.kirchhoff
     test_gnm.covariance
-    msqf = test_gnm.mean_square_fluctuation()
-    msqf_pert = test_gnm.mean_square_fluctuation_pert(6, 8, 2)
+    msqf = test_gnm.mean_square_fluctuation_update(6, 8, 2)
 
     ref_ff = ModifiedForceField(ff, len(ca), [6], [8], [2])
     ref_gnm = springcraft.GNM(ca, ref_ff)
     ref_gnm.kirchhoff
     ref_msqf = ref_gnm.mean_square_fluctuation()
-    assert np.allclose(msqf + msqf_pert, ref_msqf)
+    assert np.allclose(msqf, ref_msqf)
 
     # rank decrease
     for i in [5, 6, 7, 9, 10, 13]:
         test_gnm.modify_contact(i, 8, False)
-    msqf = test_gnm.mean_square_fluctuation()
-    msqf_pert = test_gnm.mean_square_fluctuation_pert(4, 8, False)
+    msqf = test_gnm.mean_square_fluctuation_update(4, 8, False)
 
     ref_ff = ModifiedForceField(
         ff,
@@ -162,12 +167,11 @@ def test_msqf_pert():
     ref_gnm = springcraft.GNM(ca, ref_ff)
     ref_gnm.kirchhoff
     ref_msqf = ref_gnm.mean_square_fluctuation()
-    assert np.allclose(msqf + msqf_pert, ref_msqf)
+    assert np.allclose(msqf, ref_msqf)
 
     # rank increase
     test_gnm.modify_contact(4, 8, False)
-    msqf = test_gnm.mean_square_fluctuation()
-    msqf_pert = test_gnm.mean_square_fluctuation_pert(4, 8, True)
+    msqf = test_gnm.mean_square_fluctuation_update(4, 8, True)
 
     ref_ff = ModifiedForceField(
         ff,
@@ -179,16 +183,15 @@ def test_msqf_pert():
     ref_gnm = springcraft.GNM(ca, ref_ff)
     ref_gnm.kirchhoff
     ref_msqf = ref_gnm.mean_square_fluctuation()
-    assert np.allclose(msqf + msqf_pert, ref_msqf)
+    assert np.allclose(msqf, ref_msqf)
 
     # temp scaling
-    msqf = test_gnm.mean_square_fluctuation(tem=300)
-    msqf_pert = test_gnm.mean_square_fluctuation_pert(4, 8, True, tem=300)
+    msqf = test_gnm.mean_square_fluctuation_update(4, 8, True, tem=300)
     ref_msqf = ref_gnm.mean_square_fluctuation(tem=300)
-    assert np.allclose(msqf + msqf_pert, ref_msqf)
+    assert np.allclose(msqf, ref_msqf)
 
 
-def test_bfactor_pert():
+def test_bfactor_update():
     ca = load_protein_structure("1l2y")
     ff = springcraft.InvariantForceField(7.0)
 
@@ -196,20 +199,44 @@ def test_bfactor_pert():
     test_gnm = springcraft.GNM(ca, ff)
     test_gnm.kirchhoff
     test_gnm.covariance
-    bfactor = test_gnm.bfactor()
-    bfactor_pert = test_gnm.bfactor_pert(6, 8, 2)
+    bfactor = test_gnm.bfactor_update(6, 8, 2)
 
     ref_ff = ModifiedForceField(ff, len(ca), [6], [8], [2])
     ref_gnm = springcraft.GNM(ca, ref_ff)
     ref_gnm.kirchhoff
     ref_bfactor = ref_gnm.bfactor()
-    assert np.allclose(bfactor + bfactor_pert, ref_bfactor)
+    assert np.allclose(bfactor, ref_bfactor)
+
+    # temp scaling
+    test_gnm = springcraft.GNM(ca, ff)
+    test_gnm.kirchhoff
+    test_gnm.covariance
+    bfactor = test_gnm.bfactor_update(6, 8, 2, tem=300)
+
+    ref_bfactor = ref_gnm.bfactor(tem=300)
+    assert np.allclose(bfactor, ref_bfactor)
+
+
+def test_dcc_update():
+    ca = load_protein_structure("1l2y")
+    ff = springcraft.InvariantForceField(7.0)
+
+    # no rank change
+    test_gnm = springcraft.GNM(ca, ff)
+    test_gnm.kirchhoff
+    test_gnm.covariance
+    dcc = test_gnm.dcc_update(6, 8, 2)
+
+    ref_ff = ModifiedForceField(ff, len(ca), [6], [8], [2])
+    ref_gnm = springcraft.GNM(ca, ref_ff)
+    ref_gnm.kirchhoff
+    ref_dcc = ref_gnm.dcc()
+    assert np.allclose(dcc, ref_dcc)
 
     # rank decrease
     for i in [5, 6, 7, 9, 10, 13]:
         test_gnm.modify_contact(i, 8, False)
-    bfactor = test_gnm.bfactor()
-    bfactor_pert = test_gnm.bfactor_pert(4, 8, False)
+    dcc = test_gnm.dcc_update(4, 8, False, norm=False)
 
     ref_ff = ModifiedForceField(
         ff,
@@ -220,13 +247,12 @@ def test_bfactor_pert():
     )
     ref_gnm = springcraft.GNM(ca, ref_ff)
     ref_gnm.kirchhoff
-    ref_bfactor = ref_gnm.bfactor()
-    assert np.allclose(bfactor + bfactor_pert, ref_bfactor)
+    ref_dcc = ref_gnm.dcc(norm=False)
+    assert np.allclose(dcc, ref_dcc)
 
     # rank increase
     test_gnm.modify_contact(4, 8, False)
-    bfactor = test_gnm.bfactor()
-    bfactor_pert = test_gnm.bfactor_pert(4, 8, True)
+    dcc = test_gnm.dcc_update(4, 8, True)
 
     ref_ff = ModifiedForceField(
         ff,
@@ -237,11 +263,10 @@ def test_bfactor_pert():
     )
     ref_gnm = springcraft.GNM(ca, ref_ff)
     ref_gnm.kirchhoff
-    ref_bfactor = ref_gnm.bfactor()
-    assert np.allclose(bfactor + bfactor_pert, ref_bfactor)
+    ref_dcc = ref_gnm.dcc()
+    assert np.allclose(dcc, ref_dcc)
 
     # temp scaling
-    bfactor = test_gnm.bfactor(tem=300)
-    bfactor_pert = test_gnm.bfactor_pert(4, 8, True, tem=300)
-    ref_bfactor = ref_gnm.bfactor(tem=300)
-    assert np.allclose(bfactor + bfactor_pert, ref_bfactor)
+    dcc = test_gnm.dcc_update(4, 8, True, tem=300)
+    ref_dcc = ref_gnm.dcc(tem=300)
+    assert np.allclose(dcc, ref_dcc)

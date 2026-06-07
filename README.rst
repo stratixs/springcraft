@@ -44,18 +44,59 @@ via *pip*:
 Development
 -----------
 
-For development and testing first create a conda enviroment from the
-`environment.yml` and than let poetry install the required dependencies.
+Conda Environment
+~~~~~~~~~~~~~~~~~
+
+You can use conda's optimized libraries for development by creating the provided
+conda enviroment in `environment.yml` and than installing the project in editable
+mode. This creates symlinks from conda environment to your project files so that
+changes are synced directly.
 
 .. code-block:: console
 
-   $ conda env create -f environment.yml
-   $ conda activate springcraft-dev
-   $ poetry config virtualenvs.create false
-   $ poetry install
+   $ mamba env create -f environment.yml
+   $ mamba activate springcraft-dev
+   $ pip install -e .
+
+Linting is done by `ruff` and tests are resolved by `pytest`. After installing the
+dependencies into the conda env you can run them by
+
+.. code-block:: console
+
+   $ pip install -e .[lint,test]
+   $ ruff check .  # run linter
+   $ pytest  # run test
+   $ pytest --cov=springcraft --cov-report=html --cov-branch  # run test with coverage
+
+You can lint the numpy docstrings using `numpydoc` and built the documentation with
+`sphinx-build` like this
+
+.. code-block:: console
+
+   $ pip install -e .[docs]
+   $ python -m numpydoc lint src/springcraft/*.py
+   $ sphinx-build doc build/doc
+
+Hatch Virtual Environment
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+You can also Hatch's virtual environment system. After installing `hatch` all further
+dependency management will be done by `hatch` itself. Dependencies will be installed
+into a virtual environment. Just run the following:
+
+.. code-block:: console
+
+   $ hatch run lint:run  # run linter
+   $ hatch run test:run  # run tests
+   $ hatch run docs:lint  # run linter on docstrings
+
+Building the documentation does not work using hatch. Use the conda env instead.
+
+Generate test files
+~~~~~~~~~~~~~~~~~~~
 
 Scripts to generate reference files for tests are stored in tests/data;
-a separate environment to rerun these locally can be found in `test_create_data_env.yml`.
+a separate environment to rerun these locally can be found in `environment-test-data.yml`.
 BioPhysConnectoR has to be installed separately.
 
 Example

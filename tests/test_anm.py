@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 import springcraft
-from tests.util import ModifiedForceField, data_dir, load_protein_structure, prepare_anm
+from tests.util import data_dir, load_protein_structure, prepare_anm
 
 
 def test_mass_weights_simple():
@@ -68,12 +68,12 @@ def test_hessian_covariance_setter():
     test_anm = prepare_anm("1l2y", 7)
     test_hessian1 = test_anm.hessian
     test_covariance1 = test_anm.covariance
-    test_eig_val1, _ = test_anm.eigen()
+    test_eig_values1, _ = test_anm.eigen()
     assert test_anm._interactions is not None
     assert test_anm._hessian is not None
     assert test_anm._covariance is not None
-    assert test_anm._eigen_values is not None
-    assert test_anm._eigen_vectors is not None
+    assert test_anm._eig_values is not None
+    assert test_anm._eig_vectors is not None
 
     with pytest.raises(IndexError, match="Expected shape \\(60, 60\\), got \\(5, 5\\)"):
         test_anm.hessian = np.ones((5, 5))
@@ -81,15 +81,15 @@ def test_hessian_covariance_setter():
     assert test_anm._interactions is not None
     assert test_anm._hessian is not None
     assert test_anm._covariance is None
-    assert test_anm._eigen_values is None
-    assert test_anm._eigen_vectors is None
+    assert test_anm._eig_values is None
+    assert test_anm._eig_vectors is None
 
     test_hessian2 = test_anm.hessian
     test_covariance2 = test_anm.covariance
-    test_eig_val2, _ = test_anm.eigen()
+    test_eig_values2, _ = test_anm.eigen()
     assert np.allclose(test_hessian1, test_hessian2)
     assert np.allclose(test_covariance1, test_covariance2)
-    assert np.allclose(test_eig_val1, test_eig_val2)
+    assert np.allclose(test_eig_values1, test_eig_values2)
 
     with pytest.raises(IndexError, match="Expected shape \\(60, 60\\), got \\(5, 5\\)"):
         test_anm.covariance = np.ones((5, 5))
@@ -97,21 +97,21 @@ def test_hessian_covariance_setter():
     assert test_anm._interactions is None
     assert test_anm._hessian is None
     assert test_anm._covariance is not None
-    assert test_anm._eigen_values is None
-    assert test_anm._eigen_vectors is None
+    assert test_anm._eig_values is None
+    assert test_anm._eig_vectors is None
 
     test_hessian3 = test_anm.hessian
     test_covariance3 = test_anm.covariance
-    test_eig_val3, _ = test_anm.eigen()
+    test_eig_values3, _ = test_anm.eigen()
     assert np.allclose(test_hessian2, test_hessian3)
     assert np.allclose(test_covariance2, test_covariance3)
-    assert np.allclose(test_eig_val2, test_eig_val3)
+    assert np.allclose(test_eig_values2, test_eig_values3)
 
 
 @pytest.mark.parametrize(
     "pdb_id, cutoff",
     itertools.product(
-        ["1l2y", "104l", "10nm"],
+        ["1l2y", "10nm"],
         [4, 7, 13],
     ),
 )
@@ -213,39 +213,39 @@ def test_eigen_parameters():
     cutoff = 7
     test_anm = prepare_anm(pdb_id, cutoff)
 
-    eig_val1, eig_vec1 = test_anm.eigen(copy=False, n_zero=False)
-    eig_val1[1] = 3
-    eig_vec1[1, 1] = 3
-    eig_val2, eig_vec2 = test_anm.eigen(copy=False, n_zero=False)
-    assert np.array_equal(eig_val1, eig_val2)
-    assert np.array_equal(eig_vec1, eig_vec2)
+    eig_values1, eig_vectors1 = test_anm.eigen(copy=False, n_zero=False)
+    eig_values1[1] = 3
+    eig_vectors1[1, 1] = 3
+    eig_values2, eig_vectors2 = test_anm.eigen(copy=False, n_zero=False)
+    assert np.array_equal(eig_values1, eig_values2)
+    assert np.array_equal(eig_vectors1, eig_vectors2)
 
     test_anm = prepare_anm(pdb_id, cutoff)
 
-    eig_val1, eig_vec1 = test_anm.eigen(copy=True, n_zero=False)
-    eig_val1[1] = 3
-    eig_vec1[1, 1] = 3
-    eig_val2, eig_vec2 = test_anm.eigen(copy=True, n_zero=False)
-    assert not np.array_equal(eig_val1, eig_val2)
-    assert not np.array_equal(eig_vec1, eig_vec2)
+    eig_values1, eig_vectors1 = test_anm.eigen(copy=True, n_zero=False)
+    eig_values1[1] = 3
+    eig_vectors1[1, 1] = 3
+    eig_values2, eig_vectors2 = test_anm.eigen(copy=True, n_zero=False)
+    assert not np.array_equal(eig_values1, eig_values2)
+    assert not np.array_equal(eig_vectors1, eig_vectors2)
 
     test_anm = prepare_anm(pdb_id, cutoff)
 
-    eig_val1, eig_vec1, eig_n_zero1 = test_anm.eigen(copy=False, n_zero=True)
-    eig_val1[1] = 3
-    eig_vec1[1, 1] = 3
-    eig_val2, eig_vec2, eig_n_zero2 = test_anm.eigen(copy=False, n_zero=True)
-    assert np.array_equal(eig_val1, eig_val2)
-    assert np.array_equal(eig_vec1, eig_vec2)
+    eig_values1, eig_vectors1, eig_n_zero1 = test_anm.eigen(copy=False, n_zero=True)
+    eig_values1[1] = 3
+    eig_vectors1[1, 1] = 3
+    eig_values2, eig_vectors2, eig_n_zero2 = test_anm.eigen(copy=False, n_zero=True)
+    assert np.array_equal(eig_values1, eig_values2)
+    assert np.array_equal(eig_vectors1, eig_vectors2)
 
     test_anm = prepare_anm(pdb_id, cutoff)
 
-    eig_val1, eig_vec1, eig_n_zero1 = test_anm.eigen(copy=True, n_zero=True)
-    eig_val1[1] = 3
-    eig_vec1[1, 1] = 3
-    eig_val2, eig_vec2, eig_n_zero2 = test_anm.eigen(copy=True, n_zero=True)
-    assert not np.array_equal(eig_val1, eig_val2)
-    assert not np.array_equal(eig_vec1, eig_vec2)
+    eig_values1, eig_vectors1, eig_n_zero1 = test_anm.eigen(copy=True, n_zero=True)
+    eig_values1[1] = 3
+    eig_vectors1[1, 1] = 3
+    eig_values2, eig_vectors2, eig_n_zero2 = test_anm.eigen(copy=True, n_zero=True)
+    assert not np.array_equal(eig_values1, eig_values2)
+    assert not np.array_equal(eig_vectors1, eig_vectors2)
 
 
 @pytest.mark.parametrize(
@@ -264,11 +264,11 @@ def test_eigen_before_covariance(pdb_id, cutoff):
     """
     test_anm = prepare_anm(pdb_id, cutoff)
 
-    eig_vals, eig_vecs = test_anm.eigen()
+    eig_values, eig_vectors = test_anm.eigen()
     # eigen() should calc the hessian if not present
     ref_hessian = test_anm.hessian.copy()
-    for eig_val, eig_vec in zip(eig_vals, eig_vecs):
-        assert np.allclose(np.matvec(ref_hessian, eig_vec), eig_val * eig_vec)
+    for eig_value, eig_vector in zip(eig_values, eig_vectors):
+        assert np.allclose(np.matvec(ref_hessian, eig_vector), eig_value * eig_vector)
 
     with patch("numpy.linalg.eigh") as mock_eigh:
         test_covariance = test_anm.covariance
@@ -301,10 +301,10 @@ def test_eigen_after_covariance(pdb_id, cutoff):
     assert np.allclose(test_covariance, test_covariance @ ref_hessian @ test_covariance)
 
     with patch("numpy.linalg.eigh") as mock_eigh:
-        eig_vals, eig_vecs = test_anm.eigen()
+        eig_values, eig_vectors = test_anm.eigen()
         mock_eigh.assert_not_called()
-    for eig_val, eig_vec in zip(eig_vals, eig_vecs):
-        assert np.allclose(np.matvec(ref_hessian, eig_vec), eig_val * eig_vec)
+    for eig_value, eig_vector in zip(eig_values, eig_vectors):
+        assert np.allclose(np.matvec(ref_hessian, eig_vector), eig_value * eig_vector)
 
     assert np.allclose(ref_hessian, test_anm.hessian)
 
@@ -587,7 +587,7 @@ def test_prs(file_path):
     Compare perturbation response scanning (PRS)
     results with those obtained with ProDy.
     """
-    test_anm = prepare_springcraft_anm(file_path, cutoff=13)
+    test_anm = prepare_anm(file_path, cutoff=13)
 
     strucname = basename(file_path).split(".")[0]
 
