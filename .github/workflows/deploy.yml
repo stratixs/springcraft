@@ -55,7 +55,7 @@ jobs:
         run: hatch build -t wheel
       - uses: actions/upload-artifact@v7
         with:
-          name: release-wheels-${{ matrix.os }}-${{ replace(matrix.python-version, '.', '_') }}
+          name: release-wheels-${{ matrix.os }}-${{ matrix.python-version }}
           path: dist/*.whl
           if-no-files-found: error
 
