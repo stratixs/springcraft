@@ -88,11 +88,11 @@ define_macros = [
 compile_args = [
     { platforms = ["windows"], arg = "/O2" },
     { platforms = ["linux", "darwin", "freebsd"], arg = "-O3" },
-    { platforms = ["linux", "darwin", "freebsd"], arg = "-march=native" },
     { platforms = ["linux", "darwin", "freebsd"], arch = ["x86_64", "amd64", "x86"], arg = "-msse" },
     { platforms = ["linux", "darwin", "freebsd"], arch = ["x86_64", "amd64", "x86"], arg = "-msse2" },
     { platforms = ["linux", "darwin", "freebsd"], arch = ["x86_64", "amd64", "x86"], arg = "-mfma" },
-    { platforms = ["linux", "darwin", "freebsd"], arch = ["x86_64", "amd64", "x86"], arg = "-mfpmath=sse" }
+    { platforms = ["linux", "darwin", "freebsd"], arch = ["x86_64", "amd64", "x86"], arg = "-mfpmath=sse" },
+    { platforms = ["linux", "freebsd"], arg = "-march=native" }
 ]
 extra_link_args = [
     { platforms = ["linux", "darwin", "freebsd"], arg = "-lm" }

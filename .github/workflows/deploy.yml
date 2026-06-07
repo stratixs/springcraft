@@ -21,7 +21,7 @@ jobs:
         run: pip install hatch
       - name: Build sdist
         run: hatch build -t sdist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-sdist
           path: dist/*.tar.gz
@@ -33,16 +33,15 @@ jobs:
     strategy:
       matrix:
         # macos-15-intel is an Intel runner, macos-14 is Apple silicon
-        os:
-          [
+        os: [
             ubuntu-latest,
-            ubuntu-24.04-arm,
+            #ubuntu-24.04-arm,
             windows-latest,
-            windows-11-arm,
-            macos-15-intel,
-            macos-14,
+            #windows-11-arm,
+            #macos-15-intel,
+            #macos-14,
           ]
-        python-version: ["3.11", "3.12", "3.13"]
+        python-version: ["3.11", "3.12"] #["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -54,9 +53,9 @@ jobs:
         run: pip install hatch
       - name: Build wheel
         run: hatch build -t wheel
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
-          name: release-wheels-${{ matrix.os }}-${{ matrix.python-version }}
+          name: release-wheels-${{ matrix.os }}-${{ replace(matrix.python-version, '.', '_') }}
           path: dist/*.whl
           if-no-files-found: error
 
@@ -80,7 +79,7 @@ jobs:
         run: sphinx-build doc build/doc
       - name: Zipping documentation
         run: cd build; zip -r doc.zip doc; cd ..
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-doc
           path: build/doc.zip
@@ -94,23 +93,25 @@ jobs:
     needs:
       - build-sdist
       - build-wheels
+      - build-docs
     runs-on: ubuntu-latest
     environment:
       name: publish
       url: https://pypi.org/project/springcraft/
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: release-*
           merge-multiple: true
           path: dist
       - name: List distributions to be uploaded
         run: ls dist
-      # - name: Upload to GitHub Releases
-      #   uses: softprops/action-gh-release@v2.0.5
-      #   if: github.event_name == 'release' && github.event.action == 'published'
-      #   with:
-      #     files: dist/*
+      - name: Upload to GitHub Releases
+        if: github.event_name == 'release' && github.event.action == 'published'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload ${{ github.event.release.tag_name }} dist/* --clobber
       # - name: Upload to PyPI
       #   uses: pypa/gh-action-pypi-publish@release/v1
       #   if: github.event_name == 'release' && github.event.action == 'published'
