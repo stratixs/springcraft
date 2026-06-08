@@ -581,20 +581,21 @@ def test_frequency_fluctuation_dcc(ff_name):
         assert np.allclose(test_fluc_nomw, msqf_alternative)
 
 
-@pytest.mark.parametrize("file_path", glob.glob(join(data_dir(), "*.pdb")))
-def test_prs(file_path):
+@pytest.mark.parametrize(
+    "pdb_id",
+    ["1l2y", "7cal"],
+)
+def test_prs(pdb_id):
     """
     Compare perturbation response scanning (PRS)
     results with those obtained with ProDy.
     """
-    test_anm = prepare_anm(file_path, cutoff=13)
-
-    strucname = basename(file_path).split(".")[0]
+    test_anm = prepare_anm(pdb_id, cutoff=13)
 
     test_prs, test_eff, test_sens = test_anm.prs_effector_sensor()
     ref_prs, ref_eff, ref_sens = [
         np.genfromtxt(
-            join(data_dir(), f"prody_anm_13_ang_cutoff_{prs_type}_{strucname}.csv.gz"),
+            join(data_dir(), f"prody_anm_13_ang_cutoff_{prs_type}_{pdb_id}.csv.gz"),
             delimiter=",",
         )
         for prs_type in ["prs_mat", "prs_eff", "prs_sens"]
