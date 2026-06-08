@@ -1,6 +1,5 @@
-import glob
 import itertools
-from os.path import basename, join
+from os.path import join
 from unittest.mock import patch
 
 import biotite.structure as struc
