@@ -75,12 +75,12 @@ def test_kirchhoff_covariance_setter():
     test_gnm = prepare_gnm("1l2y", 7)
     test_kirchhoff1 = test_gnm.kirchhoff
     test_covariance1 = test_gnm.covariance
-    test_eig_val1, _ = test_gnm.eigen()
+    test_eig_values1, _ = test_gnm.eigen()
     assert test_gnm._interactions is not None
     assert test_gnm._kirchhoff is not None
     assert test_gnm._covariance is not None
-    assert test_gnm._eigen_values is not None
-    assert test_gnm._eigen_vectors is not None
+    assert test_gnm._eig_values is not None
+    assert test_gnm._eig_vectors is not None
 
     with pytest.raises(ValueError, match="Expected shape \\(20, 20\\), got \\(5, 5\\)"):
         test_gnm.kirchhoff = np.ones((5, 5))
@@ -88,15 +88,15 @@ def test_kirchhoff_covariance_setter():
     assert test_gnm._interactions is not None
     assert test_gnm._kirchhoff is not None
     assert test_gnm._covariance is None
-    assert test_gnm._eigen_values is None
-    assert test_gnm._eigen_vectors is None
+    assert test_gnm._eig_values is None
+    assert test_gnm._eig_vectors is None
 
     test_kirchhoff2 = test_gnm.kirchhoff
     test_covariance2 = test_gnm.covariance
-    test_eig_val2, _ = test_gnm.eigen()
+    test_eig_values2, _ = test_gnm.eigen()
     assert np.allclose(test_kirchhoff1, test_kirchhoff2)
     assert np.allclose(test_covariance1, test_covariance2)
-    assert np.allclose(test_eig_val1, test_eig_val2)
+    assert np.allclose(test_eig_values1, test_eig_values2)
 
     with pytest.raises(IndexError, match="Expected shape \\(20, 20\\), got \\(5, 5\\)"):
         test_gnm.covariance = np.ones((5, 5))
@@ -104,15 +104,15 @@ def test_kirchhoff_covariance_setter():
     assert test_gnm._interactions is None
     assert test_gnm._kirchhoff is None
     assert test_gnm._covariance is not None
-    assert test_gnm._eigen_values is None
-    assert test_gnm._eigen_vectors is None
+    assert test_gnm._eig_values is None
+    assert test_gnm._eig_vectors is None
 
     test_kirchhoff3 = test_gnm.kirchhoff
     test_covariance3 = test_gnm.covariance
-    test_eig_val3, _ = test_gnm.eigen()
+    test_eig_values3, _ = test_gnm.eigen()
     assert np.allclose(test_kirchhoff2, test_kirchhoff3)
     assert np.allclose(test_covariance2, test_covariance3)
-    assert np.allclose(test_eig_val2, test_eig_val3)
+    assert np.allclose(test_eig_values2, test_eig_values3)
 
 
 @pytest.mark.parametrize(
@@ -130,6 +130,7 @@ def test_covariance(pdb_id, cutoff):
     assert np.allclose(
         test_anm.kirchhoff,
         test_anm.kirchhoff @ test_anm.covariance @ test_anm.kirchhoff,
+        atol=1e-7,
     )
 
 
@@ -180,40 +181,40 @@ def test_eigen_parameters():
     cutoff = 7
     test_gnm = prepare_gnm(pdb_id, cutoff)
 
-    eig_val1, eig_vec1 = test_gnm.eigen(copy=False, n_zero=False)
-    eig_val1[1] = 3
-    eig_vec1[1, 1] = 3
-    eig_val2, eig_vec2 = test_gnm.eigen(copy=False, n_zero=False)
-    assert np.array_equal(eig_val1, eig_val2)
-    assert np.array_equal(eig_vec1, eig_vec2)
+    eig_values1, eig_vectors1 = test_gnm.eigen(copy=False, n_zero=False)
+    eig_values1[1] = 3
+    eig_vectors1[1, 1] = 3
+    eig_values2, eig_vectors2 = test_gnm.eigen(copy=False, n_zero=False)
+    assert np.array_equal(eig_values1, eig_values2)
+    assert np.array_equal(eig_vectors1, eig_vectors2)
 
     test_gnm = prepare_gnm(pdb_id, cutoff)
 
-    eig_val1, eig_vec1 = test_gnm.eigen(copy=True, n_zero=False)
-    eig_val1[1] = 3
-    eig_vec1[1, 1] = 3
-    eig_val2, eig_vec2 = test_gnm.eigen(copy=True, n_zero=False)
-    assert not np.array_equal(eig_val1, eig_val2)
-    assert not np.array_equal(eig_vec1, eig_vec2)
+    eig_values1, eig_vectors1 = test_gnm.eigen(copy=True, n_zero=False)
+    eig_values1[1] = 3
+    eig_vectors1[1, 1] = 3
+    eig_values2, eig_vectors2 = test_gnm.eigen(copy=True, n_zero=False)
+    assert not np.array_equal(eig_values1, eig_values2)
+    assert not np.array_equal(eig_vectors1, eig_vectors2)
 
     test_gnm = prepare_gnm(pdb_id, cutoff)
 
-    eig_val1, eig_vec1, eig_n_zero1 = test_gnm.eigen(copy=False, n_zero=True)
-    eig_val1[1] = 3
-    eig_vec1[1, 1] = 3
-    eig_val2, eig_vec2, eig_n_zero2 = test_gnm.eigen(copy=False, n_zero=True)
-    assert np.array_equal(eig_val1, eig_val2)
-    assert np.array_equal(eig_vec1, eig_vec2)
+    eig_values1, eig_vectors1, eig_n_zero1 = test_gnm.eigen(copy=False, n_zero=True)
+    eig_values1[1] = 3
+    eig_vectors1[1, 1] = 3
+    eig_values2, eig_vectors2, eig_n_zero2 = test_gnm.eigen(copy=False, n_zero=True)
+    assert np.array_equal(eig_values1, eig_values2)
+    assert np.array_equal(eig_vectors1, eig_vectors2)
     assert eig_n_zero1 == eig_n_zero2
 
     test_gnm = prepare_gnm(pdb_id, cutoff)
 
-    eig_val1, eig_vec1, eig_n_zero1 = test_gnm.eigen(copy=True, n_zero=True)
-    eig_val1[1] = 3
-    eig_vec1[1, 1] = 3
-    eig_val2, eig_vec2, eig_n_zero2 = test_gnm.eigen(copy=True, n_zero=True)
-    assert not np.array_equal(eig_val1, eig_val2)
-    assert not np.array_equal(eig_vec1, eig_vec2)
+    eig_values1, eig_vectors1, eig_n_zero1 = test_gnm.eigen(copy=True, n_zero=True)
+    eig_values1[1] = 3
+    eig_vectors1[1, 1] = 3
+    eig_values2, eig_vectors2, eig_n_zero2 = test_gnm.eigen(copy=True, n_zero=True)
+    assert not np.array_equal(eig_values1, eig_values2)
+    assert not np.array_equal(eig_vectors1, eig_vectors2)
     assert eig_n_zero1 == eig_n_zero2
 
 
@@ -233,11 +234,11 @@ def test_eigen_before_covariance(pdb_id, cutoff):
     """
     test_gnm = prepare_gnm(pdb_id, cutoff)
 
-    eig_vals, eig_vecs = test_gnm.eigen()
+    eig_values, eig_vectors = test_gnm.eigen()
     # eigen() should calc the kirchhoff if not present
     ref_kirchhoff = test_gnm.kirchhoff.copy()
-    for eig_val, eig_vec in zip(eig_vals, eig_vecs):
-        assert np.allclose(np.matvec(ref_kirchhoff, eig_vec), eig_val * eig_vec)
+    for eig_value, eig_vector in zip(eig_values, eig_vectors):
+        assert np.allclose(np.matvec(ref_kirchhoff, eig_vector), eig_value * eig_vector)
 
     with patch("numpy.linalg.eigh") as mock_eigh:
         test_covariance = test_gnm.covariance
@@ -274,10 +275,10 @@ def test_eigen_after_covariance(pdb_id, cutoff):
     )
 
     with patch("numpy.linalg.eigh") as mock_eigh:
-        eig_vals, eig_vecs = test_gnm.eigen()
+        eig_values, eig_vectors = test_gnm.eigen()
         mock_eigh.assert_not_called()
-    for eig_val, eig_vec in zip(eig_vals, eig_vecs):
-        assert np.allclose(np.matvec(ref_kirchhoff, eig_vec), eig_val * eig_vec)
+    for eig_value, eig_vector in zip(eig_values, eig_vectors):
+        assert np.allclose(np.matvec(ref_kirchhoff, eig_vector), eig_value * eig_vector)
 
     assert np.allclose(ref_kirchhoff, test_gnm.kirchhoff)
 

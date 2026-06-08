@@ -208,6 +208,7 @@ def _patch_adjacency_matrix(
     contact_pair_off: np.ndarray | None,
     contact_pair_on: np.ndarray | None,
 ) -> None:
+    # numpydoc ignore=PR01
     """
     Apply contacts that are artificially switched off/on to an
     adjacency matrix.

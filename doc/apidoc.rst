@@ -8,20 +8,46 @@ API Reference
    :depth: 3
 
 
-Network models
+Network Models
 --------------
 
 .. autoclass:: GNM
-   :members:
-   :inherited-members:
+
+   Normal Mode Analysis
+   ~~~~~~~~~~~~~~~~~~~~
+   .. automethod:: frequencies
+   .. automethod:: mean_square_fluctuation
+   .. automethod:: bfactor
+   .. automethod:: dcc
 
 |
 
 .. autoclass:: ANM
-   :members:
-   :inherited-members:
+
+   Normal Mode Analysis
+   ~~~~~~~~~~~~~~~~~~~~
+   .. automethod:: frequencies
+   .. automethod:: mean_square_fluctuation
+   .. automethod:: bfactor
+   .. automethod:: dcc
 
 |
+
+.. autoclass:: springcraft.enm.ENM
+
+   .. automethod:: eigen
+
+
+Normal Mode Analysis
+--------------------
+
+.. autofunction:: springcraft.nma.frequencies
+
+.. autofunction:: springcraft.nma.mean_square_fluctuation
+
+.. autofunction:: springcraft.nma.bfactor
+
+.. autofunction:: springcraft.nma.dcc
 
 
 Force Fields

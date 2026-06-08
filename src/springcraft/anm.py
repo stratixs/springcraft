@@ -1,15 +1,17 @@
 """
-This module contains the :class:`ANM` class for molecular dynamics
-calculations using *Anisotropic Network Models*.
+This module contains the :class:`ANM` class for molecular dynamics calculations using
+*Anisotropic Network Models*.
 """
 
 __name__ = "springcraft"
 __author__ = "Patrick Kunzmann, Raphael Sutter"
 __all__ = ["ANM"]
 
+from typing import Literal, Union, overload
+
 import biotite.structure as struc
 import numpy as np
-from typing_extensions import Literal, Union, overload, override
+from typing_extensions import override
 
 from springcraft import nma
 from springcraft.enm import ENM
@@ -27,46 +29,56 @@ class ANM(ENM):
         The atoms or their coordinates that are part of the model.
         It usually contains only CA atoms.
     force_field : ForceField, natoms=n
-        The :class:`ForceField` that defines the cutoff distance and
-        pairwise interaction strengths between the given `atoms`.
+        The :class:`ForceField` that defines the cutoff distance and pairwise
+        interaction strengths between the given `atoms`.
     masses : bool or ndarray, shape=(n,), dtype=float, optional
-        If an array is given, the Hessian is weighted with the inverse
-        square root of the given masses.
-        If set to true, these masses are automatically inferred from the
-        ``res_name`` annotation of `atoms`, instead.
-        This requires `atoms` to be an :class:`AtomArray`.
+        If an array is given, the `hessian` matrix is weighted with the inverse square
+        root of the given masses.
+        If set to true, these masses are automatically inferred from the `res_name`
+        annotation of `atoms`, instead. This requires `atoms` to be an
+        :class:`AtomArray`.
         By default no mass-weighting is applied.
     use_cell_list : bool, optional
-        If true, a *cell list* is used to find atoms within cutoff
-        distance instead of checking all pairwise atom distances.
-        This significantly increases the performance for large number of
-        atoms, but is slower for very small systems.
-        If the `force_field` does not provide a cutoff, no cell list is
-        used regardless.
+        If true, a *cell list* is used to find atoms within cutoff distance instead of
+        checking all pairwise atom distances. This significantly increases the
+        performance for large number of atoms, but is slower for very small systems.
+        If the `force_field` does not provide a cutoff, no cell list is used regardless.
 
     Attributes
     ----------
-    hessian : ndarray, shape=(n*3,n*3), dtype=float
-        The *Hessian* matrix for this model.
-        Each dimension is partitioned in the form
-        ``[x1, y1, z1, ... xn, yn, zn]``.
-        This is not a copy: Create a copy before modifying this matrix.
-    covariance : ndarray, shape=(n,n), dtype=float
-        The covariance matrix for this model, i.e. the inverted
-        *Hessian* matrix. The returned covariance matrix is not scaled
-        correctly and does not have the correct unit. To obtain the true
-        covariance matrix, you can calculate
-
-        .. math::
-
-            \\text{Cov}_\\text{true} = k_B T \\text{Cov}
-
-        with Boltzman constant :math:`k_B` and absolut temperature
-        :math:`[T] = K` in Kelvin.
-
-        This is not a copy: Create a copy before modifying this matrix.
     masses : None or ndarray, shape=(n,), dtype=float
         The mass for each atom, `None` if no mass weighting is applied.
+    hessian : ndarray, shape=(n,n), dtype=float
+        The *hessian* matrix for this model. Adjacency matrix of `atoms` that are
+        within cutoff distance of another. The weights of this adjacency matrix are the
+        force constants of the abstract springs between the atoms in the ENM.
+    covariance : ndarray, shape=(n,n), dtype=float
+        The covariance matrix for this model, i.e. the inverted `hessian` matrix.
+    has_covariance : bool
+        Whether the covariance matrix is already calculated.
+        If not the matrix gets calculated when the property is accessed.
+    has_eigen : bool
+        Whether the eigenvalues and -vectors of the `hessian` matrix are already
+        calculated. If not the values get calculated when the property is accessed.
+    dof : int
+        Degrees of freedom considered per atom, ``dof = 1``.
+
+    Warnings
+    --------
+    The `hessian` and `covariance` attributes do not return a copy. Modification to
+    the matrix may result in faulty behaviour of the ENM. Consider creating a copy
+    before modification.
+
+    Notes
+    -----
+    The Laplacian `hessian` matrix is guaranteed to be rank-deficient. The `covariance`
+    matrix :math:`\\zeta` is therefor the pseudoinverse of the `hessian` matrix
+    :math:`\\Gamma` which satisfies the following conditions
+
+    .. math::
+
+        \\Gamma = \\Gamma \\cdot \\zeta \\cdot \\Gamma \\\\
+        \\zeta = \\zeta \\cdot \\Gamma \\cdot \\zeta
     """
 
     _hessian: np.ndarray | None
@@ -109,18 +121,12 @@ class ANM(ENM):
 
         # Invalidate dependent values
         self._covariance = None
-        self._eigen_values = None
-        self._eigen_vectors = None
+        self._eig_values = None
+        self._eig_vectors = None
 
     @property
     @override
     def dof(self) -> int:
-        """
-        Returns
-        -------
-        dof : int
-            Returns the Degree of Freedom per atom.
-        """
         return 3
 
     @overload
@@ -136,35 +142,6 @@ class ANM(ENM):
     def eigen(
         self, n_zero=False, copy=True
     ) -> Union[tuple[np.ndarray, np.ndarray], tuple[np.ndarray, np.ndarray, int]]:
-        """
-        Compute or fetch the Eigenvalues and Eigenvectors of the
-        *Hessian* matrix.
-
-        The laplacian *Hessian* matrix is guaranteed to be
-        rank-deficient. Numerical inconsistencies occur during
-        eigenvalue calculation. All quasi-zero eigenvalues are set to 0.
-
-        Parameters
-        ----------
-        n_zero : bool, optional, default=False
-            Whether to return number of zero eigenvalues.
-            These are the first eigenvalues.
-        copy : bool, optional, default=True
-            Whether to return the eigenvalues and eigenvectors as copies.
-            If you choose not to return copies a modification to these
-            values can reflect in incorrect behaviour of the class.
-
-        Returns
-        -------
-        eigen_values : ndarray, shape=(k,), dtype=float
-            Eigenvalues of the *Hessian* matrix in ascending order.
-        eigen_vectors : ndarray, shape=(k,n), dtype=float
-            Eigenvectors of the *Hessian* matrix.
-            ``eig_values[i]`` corresponds to ``eig_vectors[i]``.
-        eigen_n_zero : int, optional
-            The number of the (first) zero eigenvalues.
-            Only returned if ``n_zero`` is set.
-        """
         self.hessian  # calc hessian if non-existant
         return super().eigen(n_zero, copy)
 
@@ -193,7 +170,7 @@ class ANM(ENM):
             :meth:`eigen()`:
             Increasing indices refer to oscillations with increasing
             frequency.
-            The first 6 modes represent tigid body movements
+            The first 6 modes represent rigid body movements
             (rotations and translations).
         amplitude : int
             The oscillation amplitude is scaled so that the maximum
@@ -241,7 +218,6 @@ class ANM(ENM):
             "Protein Structural Change Upon Ligand Binding:
             Linear Response Theory."
             Phys Rev Lett. 94, 7, 078102 (2005).
-
         """
         return nma.linear_response(self, force)
 
@@ -272,7 +248,7 @@ class ANM(ENM):
 
         Parameters
         ----------
-        norm: bool, optional
+        norm : bool, optional
             Normalize by the self perturbation-response of the perturbed
             ANM node.
 
