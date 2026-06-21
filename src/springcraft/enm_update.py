@@ -289,38 +289,33 @@ class ENMUpdate(ENM):
             x = slice_t @ covariance[slice_i, :] - slice_t @ covariance[slice_j, :]
             beta = 1 + delta * slice_t @ (x[slice_i] - x[slice_j])
 
-        if np.abs(beta) < 1e-6:
-            # rank decrease
-            cov_mul_diff = covariance @ x
-            x_dot = x @ x
-            alpha = (x @ cov_mul_diff) / (x_dot**2)
+        gamma = np.sum(np.diag(interactions[slice_i, slice_j]))
+        if np.abs(gamma) < 1e-6:
+            # potential rank increase
+            y = interactions @ x
+            y[slice_i] -= slice_t
+            y[slice_j] += slice_t
+            y_dot = y @ y
+            if y_dot > 1e-6:
+                # rank increase
+                update(alpha=1 / y_dot, x=x, y=y)
+                update(alpha=1 / y_dot, x=y, y=x)
+                update(alpha=beta / (delta * y_dot * y_dot), x=y, y=y)
+                return
+        elif np.abs(gamma - delta) < 1e-6:
+            # potential rank decrease
+            if np.abs(beta) < 1e-6:
+                # rank decrease
+                cov_mul_diff = covariance @ x
+                x_dot = x @ x
+                alpha = (x @ cov_mul_diff) / (x_dot**2)
 
-            update(alpha=1 / -x_dot, x=x, y=cov_mul_diff)
-            update(alpha=1 / -x_dot, x=cov_mul_diff, y=x)
-            update(alpha=alpha, x=x, y=x)
-            return
-
-        t = interactions[slice_j] @ x + interactions[slice_i] @ x
-        if np.max(np.abs(t)) < 1e-6:
-            # normal case: no rank change
-            update(alpha=-delta / beta, x=x, y=x)
-            return
-
-        y = interactions @ x
-        y[slice_i] -= slice_t
-        y[slice_j] += slice_t
-        y_dot = y @ y
-        if y_dot < 1e-6:
-            # still normal case but with more precision
-            update(alpha=-delta / beta, x=x, y=x)
-            return
-
-        else:
-            # rank increase
-            update(alpha=1 / y_dot, x=x, y=y)
-            update(alpha=1 / y_dot, x=y, y=x)
-            update(alpha=beta / (delta * y_dot * y_dot), x=y, y=y)
-            return
+                update(alpha=1 / -x_dot, x=x, y=cov_mul_diff)
+                update(alpha=1 / -x_dot, x=cov_mul_diff, y=x)
+                update(alpha=alpha, x=x, y=x)
+                return
+        # normal case: no rank change
+        update(alpha=-delta / beta, x=x, y=x)
 
     def _modify_interactions(
         self,
