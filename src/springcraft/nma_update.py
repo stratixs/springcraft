@@ -82,10 +82,7 @@ def frequencies_update(
     z = slice_t @ eig_vectors[slice_i] - slice_t @ eig_vectors[slice_j]
 
     # check whether rank increases
-    t = slice_t @ (
-        eig_vectors[slice_i, :eig_n_triv] - eig_vectors[slice_j, :eig_n_triv]
-    )
-    if np.any(np.abs(t) > 1e-6):
+    if np.any(np.abs(z[:eig_n_triv]) > 1e-6):
         eig_n_triv -= 1
 
     eig_values_update = eigenvalue_update(
