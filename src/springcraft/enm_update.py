@@ -212,10 +212,10 @@ class ENMUpdate(ENM):
         else:
             tensor = np.outer(delta * slice_t, slice_t)
 
-        self.interactions[slice_i, slice_j] -= tensor
-        self.interactions[slice_j, slice_i] -= tensor
-        self.interactions[slice_i, slice_i] += tensor
-        self.interactions[slice_j, slice_j] += tensor
+        self._interactions[slice_i, slice_j] -= tensor
+        self._interactions[slice_j, slice_i] -= tensor
+        self._interactions[slice_i, slice_i] += tensor
+        self._interactions[slice_j, slice_j] += tensor
 
     def _modify_covariance(
         self,
@@ -498,12 +498,12 @@ def covariance_update(
         # potential rank decrease
         if np.abs(beta) < 1e-6:
             # rank decrease
-            cov_mul_diff = covariance @ x
+            w = covariance @ x
             x_dot = x @ x
-            alpha = (x @ cov_mul_diff) / (x_dot**2)
+            alpha = (x @ w) / (x_dot**2)
 
-            update(alpha=1 / -x_dot, x=x, y=cov_mul_diff)
-            update(alpha=1 / -x_dot, x=cov_mul_diff, y=x)
+            update(alpha=1 / -x_dot, x=x, y=w)
+            update(alpha=1 / -x_dot, x=w, y=x)
             update(alpha=alpha, x=x, y=x)
             return
     # normal case: no rank change
