@@ -89,8 +89,9 @@ class ANM(ENMUpdate):
         force_field: ForceField,
         masses: bool | np.ndarray | None = None,
         use_cell_list: bool = True,
+        higher_precision: bool = False,
     ):
-        super().__init__(atoms, force_field, masses, use_cell_list)
+        super().__init__(atoms, force_field, masses, use_cell_list, higher_precision)
 
         self._hessian = None
 

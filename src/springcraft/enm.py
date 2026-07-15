@@ -7,6 +7,7 @@ __name__ = "springcraft"
 __author__ = "Raphael Sutter"
 __all__ = ["ENM"]
 
+import warnings
 from abc import ABC, abstractmethod
 from typing import Literal, Union, overload
 
@@ -84,6 +85,8 @@ class ENM(ABC):
     _natoms: int
     # whether to use an optimized algorithm to calculate the _interaction matrix
     _use_cell_list: bool
+    # whether to use higher precision for eigen (and covariance) calculation
+    _higher_precision: bool
 
     def __init__(
         self,
@@ -91,11 +94,13 @@ class ENM(ABC):
         force_field: ForceField,
         masses=None,
         use_cell_list=True,
+        higher_precision=False,
     ):
         self._coord = np.asarray(struc.coord(atoms)).astype(np.float64, copy=False)
         self._natoms = len(self._coord)
         self._ff = force_field
         self._use_cell_list = use_cell_list
+        self._higher_precision = higher_precision
 
         if masses is None or masses is False:
             self._masses = None
@@ -133,14 +138,22 @@ class ENM(ABC):
     @property
     def covariance(self) -> np.ndarray:
         if self._covariance is None:
-            # same algorithm as linalg.pinv
-            # but we want to store calculates eigenvalues in the process
-            s, u, n_zero = self.eigen(n_zero=True, copy=False)
+            if self._higher_precision and not self.has_eigen:
+                if self._interactions is None:
+                    raise AttributeError(
+                        "Interactions matrix needs to be calculated first."
+                    )
 
-            si = np.zeros_like(s)
-            si[n_zero:] = 1 / s[n_zero:]
+                self._covariance = np.linalg.pinv(self._interactions, rcond=1e-6)
+            else:
+                # same algorithm as linalg.pinv(hermitian=True)
+                # but we want to store calculates eigenvalues in the process
+                s, u, n_zero = self.eigen(n_zero=True, copy=False)
 
-            self._covariance = u.T @ np.multiply(si[..., np.newaxis], u)
+                si = np.zeros_like(s)
+                si[n_zero:] = 1 / s[n_zero:]
+
+                self._covariance = u.T @ np.multiply(si[..., np.newaxis], u)
 
         return self._covariance
 
@@ -222,7 +235,13 @@ class ENM(ABC):
         if self._eig_values is None or self._eig_vectors is None:
             assert self._interactions is not None  # should never happen
 
-            self._eig_values, self._eig_vectors = np.linalg.eigh(self._interactions)
+            if self._higher_precision:
+                self._eig_values, self._eig_vectors = np.linalg.eig(self._interactions)
+                order = np.argsort(self._eig_values)
+                self._eig_values = np.take_along_axis(self._eig_values, order)
+                self._eig_vectors = self._eig_vectors[:, order]
+            else:
+                self._eig_values, self._eig_vectors = np.linalg.eigh(self._interactions)
 
             threshold = self._eig_values[-1] * 1e-6  # max(eig_values) * 10^-6
             i = 0
@@ -239,9 +258,11 @@ class ENM(ABC):
                 v[:m], v[m : m + n] = v[n : n + m].copy(), v[:n].copy()
                 V[:, :m], V[:, m : m + n] = V[:, n : n + m].copy(), V[:, :n].copy()
 
-                raise RuntimeWarning(
+                warnings.warn(
                     "Numerical error during EigenValue calculation. "
-                    "Some analysis might fail."
+                    "Some analysis might fail.",
+                    category=RuntimeWarning,
+                    stacklevel=2,
                 )
 
             self._eigen_n_zero = n_triv

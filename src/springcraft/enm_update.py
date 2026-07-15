@@ -6,7 +6,7 @@ calculation.
 
 __name__ = "springcraft"
 __author__ = "Raphael Sutter"
-__all__ = ["ENMUpdate"]
+__all__ = ["ENMUpdate", "covariance_update"]
 
 from abc import abstractmethod
 from typing import Callable
@@ -52,7 +52,7 @@ class ENMUpdate(ENM):
         --------
         springcraft.enm_update.ENMUpdate.prepare_update :
             More Information about the update parameters.
-        springcraft.enm_update.ENMUpdate.covariance_update :
+        springcraft.enm_update.covariance_update :
             More information about the covariance update.
         """
         slice_i, slice_j, slice_t, delta = self.prepare_update(atom_i, atom_j, delta)
@@ -99,7 +99,7 @@ class ENMUpdate(ENM):
 
         See Also
         --------
-        springcraft.enm_update.ENMUpdate.covariance_update :
+        springcraft.enm_update.covariance_update :
             More information about the covariance update.
         """
         if self._interactions is None:
@@ -178,9 +178,8 @@ class ENMUpdate(ENM):
         if atom_i == atom_j:
             raise IndexError("Cannot modify contact with itself.")
 
-    @staticmethod
-    def interactions_update(
-        interactions: np.ndarray,
+    def _modify_interactions(
+        self,
         slice_i: int | np.intp | slice,
         slice_j: int | np.intp | slice,
         slice_t: None | np.ndarray,
@@ -213,134 +212,10 @@ class ENMUpdate(ENM):
         else:
             tensor = np.outer(delta * slice_t, slice_t)
 
-        interactions[slice_i, slice_j] -= tensor
-        interactions[slice_j, slice_i] -= tensor
-        interactions[slice_i, slice_i] += tensor
-        interactions[slice_j, slice_j] += tensor
-
-    @staticmethod
-    def covariance_update(
-        interactions: np.ndarray,
-        covariance: np.ndarray,
-        slice_i: int | np.intp | slice,
-        slice_j: int | np.intp | slice,
-        slice_t: None | np.ndarray,
-        delta: float,
-        update: Callable,
-    ):
-        """
-        Performs a one-rank permutation on the given `interactions` matrix where the
-        interaction strength between atoms `i` and `j` is changed by `delta`.
-
-        The `update` Callable allows for different appliances of the update mechanism.
-        It must have the following signature
-        ``def update(alpha: float, x: np.ndarray, y: np.ndarray)`` and describe the
-        following permutation to covariance matrix ``C``:
-
-        >>> C + alpha * np.outer(x, y)
-
-        This method does not perform any input checking.
-
-        Parameters
-        ----------
-        interactions, covariance : np.ndarray, shape(n,n), dtype=float
-            The `interactions` and `covariance` matrix to change.
-        slice_i, slice_j : slice
-            Index ranges (size k).
-        slice_t : ndarray, shape(k,), dtype=float
-            Value(s) for the index range.
-        delta : float
-            Permutation factor.
-        update : Callable
-            One-rank permutation to the covariance matrix.
-
-        See Also
-        --------
-        springcraft.enm_update.ENMUpdate.prepare_update :
-           More information about the update parameters.
-
-        Notes
-        -----
-        Let the `covariance` matrix :math:`\\zeta` be the pseudo inverse of the
-        `interactions` matrix :math:`\\Gamma`. Changing the force constant between atoms
-        `i` and `j` by an arbitrary amount :math:`\\delta` can be described by a
-        rank-one update to :math:`\\Gamma` with a vector :math:`\\vec{c}` of matching
-        dimensions like
-
-        .. math:: \\tilde{\\Gamma} = \\Gamma + \\delta \\vec{c} \\vec{c}^T
-
-        This rank-one update can increase or decrease the rank or leave it unchanged.
-
-        If the rank is unchanged than the updated covariance matrix can be described by
-
-        .. math:: \\tilde{\\zeta} = \\zeta +
-                                    \\frac{\\zeta \\vec{c} \\delta \\vec{c}^T \\zeta}
-                                          {1 + \\delta \\vec{c}^T \\zeta \\vec{c}}
-                                  = \\zeta + \\frac{\\vec{x} \\vec{x}^T}{\\beta}
-
-        with :math:`\\vec{x} = \\zeta \\vec{c}` and
-        :math:`\\beta = 1 + \\delta \\vec{c}^T \\zeta \\vec{c}`.
-        """
-        if slice_t is None:
-            slice_t = 1  # pyright: ignore[reportAssignmentType]
-            x = covariance[slice_i, :] - covariance[slice_j, :]
-            beta = 1 + delta * (x[slice_i] - x[slice_j])
-        else:
-            x = slice_t @ covariance[slice_i, :] - slice_t @ covariance[slice_j, :]
-            beta = 1 + delta * slice_t @ (x[slice_i] - x[slice_j])
-
-        if np.abs(beta) < 1e-6:
-            # rank decrease
-            cov_mul_diff = covariance @ x
-            x_dot = x @ x
-            alpha = (x @ cov_mul_diff) / (x_dot**2)
-
-            update(alpha=1 / -x_dot, x=x, y=cov_mul_diff)
-            update(alpha=1 / -x_dot, x=cov_mul_diff, y=x)
-            update(alpha=alpha, x=x, y=x)
-            return
-
-        t = interactions[slice_j] @ x + interactions[slice_i] @ x
-        if np.max(np.abs(t)) < 1e-6:
-            # normal case: no rank change
-            update(alpha=-delta / beta, x=x, y=x)
-            return
-
-        y = interactions @ x
-        y[slice_i] -= slice_t
-        y[slice_j] += slice_t
-        y_dot = y @ y
-        if y_dot < 1e-6:
-            # still normal case but with more precision
-            update(alpha=-delta / beta, x=x, y=x)
-            return
-
-        else:
-            # rank increase
-            update(alpha=1 / y_dot, x=x, y=y)
-            update(alpha=1 / y_dot, x=y, y=x)
-            update(alpha=beta / (delta * y_dot * y_dot), x=y, y=y)
-            return
-
-    def _modify_interactions(
-        self,
-        slice_i: int | np.intp | slice,
-        slice_j: int | np.intp | slice,
-        slice_t: None | np.ndarray,
-        delta: float,
-    ):
-        # numpydoc ignore=PR01
-        """
-        Application of the `interactions_update` method to this
-        model's interaction matrix.
-        """
-        self.interactions_update(
-            self._interactions,
-            slice_i,
-            slice_j,
-            slice_t,
-            delta,
-        )
+        self._interactions[slice_i, slice_j] -= tensor
+        self._interactions[slice_j, slice_i] -= tensor
+        self._interactions[slice_i, slice_i] += tensor
+        self._interactions[slice_j, slice_j] += tensor
 
     def _modify_covariance(
         self,
@@ -354,7 +229,7 @@ class ENMUpdate(ENM):
         Application of the `covariance_update` method to this
         model's covariance matrix.
         """
-        self.covariance_update(
+        covariance_update(
             self._interactions,
             self._covariance,
             slice_i,
@@ -588,3 +463,104 @@ class ENMUpdate(ENM):
         return nma_update.dcc_update(
             self, atom_i, atom_j, delta, mode_subset, norm, tem, tem_factors
         )
+
+
+def covariance_update(
+    interactions: np.ndarray,
+    covariance: np.ndarray,
+    slice_i: int | np.intp | slice,
+    slice_j: int | np.intp | slice,
+    slice_t: None | np.ndarray,
+    delta: float,
+    update: Callable,
+):
+    """
+    Performs a one-rank permutation on the given `interactions` matrix where the
+    interaction strength between atoms `i` and `j` is changed by `delta`.
+
+    The `update` Callable allows for different appliances of the update mechanism.
+    It must have the following signature
+    ``def update(alpha: float, x: np.ndarray, y: np.ndarray)`` and describe the
+    following permutation to covariance matrix ``C``:
+
+    >>> C + alpha * np.outer(x, y)
+
+    This method does not perform any input checking.
+
+    Parameters
+    ----------
+    interactions, covariance : np.ndarray, shape(n,n), dtype=float
+        The `interactions` and `covariance` matrix to change.
+    slice_i, slice_j : slice
+        Index ranges (size k).
+    slice_t : ndarray, shape(k,), dtype=float
+        Value(s) for the index range.
+    delta : float
+        Permutation factor.
+    update : Callable
+        One-rank permutation to the covariance matrix.
+
+    See Also
+    --------
+    springcraft.enm_update.ENMUpdate.prepare_update :
+       More information about the update parameters.
+
+    Notes
+    -----
+    Let the `covariance` matrix :math:`\\zeta` be the pseudo inverse of the
+    `interactions` matrix :math:`\\Gamma`. Changing the force constant between atoms
+    `i` and `j` by an arbitrary amount :math:`\\delta` can be described by a
+    rank-one update to :math:`\\Gamma` with a vector :math:`\\vec{c}` of matching
+    dimensions like
+
+    .. math:: \\tilde{\\Gamma} = \\Gamma + \\delta \\vec{c} \\vec{c}^T
+
+    This rank-one update can increase or decrease the rank or leave it unchanged.
+
+    If the rank is unchanged than the updated covariance matrix can be described by
+
+    .. math:: \\tilde{\\zeta} = \\zeta +
+                                \\frac{\\zeta \\vec{c} \\delta \\vec{c}^T \\zeta}
+                                      {1 + \\delta \\vec{c}^T \\zeta \\vec{c}}
+                              = \\zeta + \\frac{\\vec{x} \\vec{x}^T}{\\beta}
+
+    with :math:`\\vec{x} = \\zeta \\vec{c}` and
+    :math:`\\beta = 1 + \\delta \\vec{c}^T \\zeta \\vec{c}`.
+    """
+    if slice_t is None:
+        slice_t = 1  # pyright: ignore[reportAssignmentType]
+        x = covariance[slice_i, :] - covariance[slice_j, :]
+        beta = 1 + delta * (x[slice_i] - x[slice_j])
+    else:
+        x = slice_t @ covariance[slice_i, :] - slice_t @ covariance[slice_j, :]
+        beta = 1 + delta * slice_t @ (x[slice_i] - x[slice_j])
+
+    gamma = interactions[slice_i, slice_j]
+    if len(gamma.shape) > 0:
+        gamma = np.sum(np.diag(gamma))
+    if np.abs(gamma) < 1e-6:
+        # potential rank increase
+        y = interactions @ x
+        y[slice_i] -= slice_t
+        y[slice_j] += slice_t
+        y_dot = y @ y
+        if y_dot > 1e-6:
+            # rank increase
+            update(alpha=1 / y_dot, x=x, y=y)
+            update(alpha=1 / y_dot, x=y, y=x)
+            update(alpha=beta / (delta * y_dot * y_dot), x=y, y=y)
+            return
+    elif np.abs(gamma - delta) < 1e-6:
+        # potential rank decrease
+        if np.abs(beta) < 1e-6:
+            # rank decrease
+            w = covariance @ x
+            x_dot = x @ x
+            alpha = (x @ w) / (x_dot**2)
+
+            update(alpha=1 / -x_dot, x=x, y=w)
+            update(alpha=1 / -x_dot, x=w, y=x)
+            update(alpha=alpha, x=x, y=x)
+            return
+    # normal case: no rank change
+    update(alpha=-delta / beta, x=x, y=x)

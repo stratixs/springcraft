@@ -66,8 +66,10 @@ Network Models
 .. autoclass:: springcraft.enm_update.ENMUpdate
 
    .. automethod:: prepare_update
-   .. automethod:: interactions_update
-   .. automethod:: covariance_update
+
+.. autofunction:: springcraft.enm_update.interactions_update
+
+.. autofunction:: springcraft.enm_update.covariance_update
 
 
 Normal Mode Analysis

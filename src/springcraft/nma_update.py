@@ -143,7 +143,7 @@ def mean_square_fluctuation_update(
     springcraft.enm_update.ENMUpdate.prepare_update :
         More information about the update parameters.
     springcraft.nma.mean_square_fluctuation : Mean square fluctuation calculation.
-    springcraft.enm_update.ENMUpdate.covariance_update :
+    springcraft.enm_update.covariance_update :
         More information about the covariance update.
     _calc_updated_eigen : More information about the eigenvalue update.
 
@@ -156,7 +156,7 @@ def mean_square_fluctuation_update(
     >>> enm.modify_contact(atom_i, atom_j, delta)
     >>> msqf = nma.mean_square_fluctuation(enm)
     """
-    from springcraft.enm_update import ENMUpdate
+    from springcraft.enm_update import ENMUpdate, covariance_update
 
     if not isinstance(enm, ENMUpdate):
         raise ValueError("Instance of ENMUpdate class expected.")
@@ -168,7 +168,7 @@ def mean_square_fluctuation_update(
             nonlocal msqf_update
             msqf_update += alpha * x * y
 
-        enm.covariance_update(
+        covariance_update(
             enm._interactions,
             enm.covariance,
             *enm.prepare_update(atom_i, atom_j, delta),
@@ -307,7 +307,7 @@ def dcc_update(
     springcraft.enm_update.ENMUpdate.prepare_update :
         More information about the update parameters.
     springcraft.nma.dcc : The DCC calculation.
-    springcraft.enm_update.ENMUpdate.covariance_update :
+    springcraft.enm_update.covariance_update :
        More information about the covariance update.
     _calc_updated_eigen : More information about the eigenvalue update.
 
@@ -320,7 +320,7 @@ def dcc_update(
     >>> enm.modify_contact(atom_i, atom_j, delta)
     >>> dcc = nma.dcc(enm)
     """
-    from springcraft.enm_update import ENMUpdate
+    from springcraft.enm_update import ENMUpdate, covariance_update
 
     if not isinstance(enm, ENMUpdate):
         raise ValueError("Instance of ENMUpdate class expected.")
@@ -332,7 +332,7 @@ def dcc_update(
             nonlocal dcc_update
             ger(float(alpha), x, y, a=dcc_update.T, overwrite_a=True)
 
-        enm.covariance_update(
+        covariance_update(
             enm._interactions,
             enm.covariance,
             *enm.prepare_update(atom_i, atom_j, delta),
