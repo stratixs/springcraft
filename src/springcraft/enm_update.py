@@ -242,11 +242,56 @@ class ENMUpdate(ENM):
     def _default_ger(self, alpha: float, x: np.ndarray, y: np.ndarray):
         ger(float(alpha), x, y, a=self._covariance.T, overwrite_a=True)
 
+    def frequencies_update(
+        self,
+        atom_i: int,
+        atom_j: int,
+        delta: float | int | bool,
+    ) -> np.ndarray:
+        """
+        Compute the oscillation frequencies of a permutated model where the interaction
+        strength between atoms `i` and `j` is changed by `delta`.
+
+        Significantly faster than modifying the model and calculating from scratch. Does
+        not change any model attributes.
+
+        Parameters
+        ----------
+        atom_i, atom_j : int
+            Atom indices with ``atom_i != atom_j``.
+        delta : bool or int or float
+            The change in interaction strength (``True``: reset, ``False``: set 0,
+            scalar: change by value).
+
+        Returns
+        -------
+        freq : ndarray, shape=(n,), dtype=float
+            Oscillation frequencies of the updated model.
+
+        See Also
+        --------
+        springcraft.enm_update.ENMUpdate.prepare_update :
+           More information about the update parameters.
+        springcraft.nma.frequencies : The frequency calculation.
+        springcraft.nma_update.frequencies_update : The frequency update.
+
+        Examples
+        --------
+        The following two snippets create the same result
+
+        >>> freq = enm.frequencies_update(atom_i, atom_j, delta)
+
+        >>> enm.modify_contact(atom_i, atom_j, delta)
+        >>> freq = enm.frequencies()
+        """
+        return nma_update.frequencies_update(self, atom_i, atom_j, delta)
+
     def mean_square_fluctuation_update(
         self,
         atom_i: int,
         atom_j: int,
         delta: float | int | bool,
+        mode_subset: np.ndarray | None = None,
         tem: int | float | None = None,
         tem_factors: int | float = K_B,
     ) -> np.ndarray:
@@ -264,6 +309,8 @@ class ENMUpdate(ENM):
         delta : bool or int or float
             The change in interaction strength (``True``: reset, ``False``: set 0,
             scalar: change by value).
+        mode_subset : ndarray, shape=(k,), dtype=int, optional
+            Specifies the subset of modes considered in the computation.
         tem : float or int or None, optional
             Temperature in Kelvin. If ``tem`` is ``None``, no temp scaling is conducted.
             The default is ``None``.
@@ -295,7 +342,7 @@ class ENMUpdate(ENM):
         >>> msqf = enm.mean_square_fluctuation()
         """
         return nma_update.mean_square_fluctuation_update(
-            self, atom_i, atom_j, delta, tem, tem_factors
+            self, atom_i, atom_j, delta, mode_subset, tem, tem_factors
         )
 
     def bfactor_update(
@@ -303,6 +350,7 @@ class ENMUpdate(ENM):
         atom_i: int,
         atom_j: int,
         delta: float | int | bool,
+        mode_subset: np.ndarray | None = None,
         tem: float | int | None = None,
         tem_factors: float | int = K_B,
     ) -> np.ndarray:
@@ -320,6 +368,8 @@ class ENMUpdate(ENM):
         delta : bool or int or float
             The change in interaction strength (``True``: reset, ``False``: set 0,
             scalar: change by value).
+        mode_subset : ndarray, shape=(k,), dtype=int, optional
+            Specifies the subset of modes considered in the computation.
         tem : float or int or None, optional
             Temperature in Kelvin. If ``tem`` is ``None``, no temp scaling is conducted.
             The default is ``None``.
@@ -348,13 +398,16 @@ class ENMUpdate(ENM):
         >>> enm.modify_contact(atom_i, atom_j, delta)
         >>> bfactors = enm.bfactor()
         """
-        return nma_update.bfactor_update(self, atom_i, atom_j, delta, tem, tem_factors)
+        return nma_update.bfactor_update(
+            self, atom_i, atom_j, delta, mode_subset, tem, tem_factors
+        )
 
     def dcc_update(
         self,
         atom_i: int,
         atom_j: int,
         delta: float | int | bool,
+        mode_subset: np.ndarray | None = None,
         norm: bool = True,
         tem: float | int | None = None,
         tem_factors: float | int = K_B,
@@ -373,6 +426,9 @@ class ENMUpdate(ENM):
         delta : bool or int or float
             The change in interaction strength (``True``: reset, ``False``: set 0,
             scalar: change by value).
+        mode_subset : ndarray, shape=(k,), dtype=int or None, optional
+            Specifies the subset of modes considered in the computation.
+            The default is ``None``.
         norm : bool
             Whether to normalize using the mean square fluctuations.
             The default is ``True``.
@@ -405,7 +461,7 @@ class ENMUpdate(ENM):
         >>> dcc = enm.dcc()
         """
         return nma_update.dcc_update(
-            self, atom_i, atom_j, delta, norm, tem, tem_factors
+            self, atom_i, atom_j, delta, mode_subset, norm, tem, tem_factors
         )
 
 

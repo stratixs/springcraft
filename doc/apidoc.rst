@@ -27,6 +27,7 @@ Network Models
 
    Normal Mode Anaysis Update
    ~~~~~~~~~~~~~~~~~~~~~~~~~~
+   .. automethod:: frequencies_update
    .. automethod:: mean_square_fluctuation_update
    .. automethod:: bfactor_update
    .. automethod:: dcc_update
@@ -49,6 +50,7 @@ Network Models
 
    Normal Mode Anaysis Update
    ~~~~~~~~~~~~~~~~~~~~~~~~~~
+   .. automethod:: frequencies_update
    .. automethod:: mean_square_fluctuation_update
    .. automethod:: bfactor_update
    .. automethod:: dcc_update
@@ -85,11 +87,15 @@ Normal Mode Analysis
 Normal Mode Analysis Update
 ---------------------------
 
+.. autofunction:: springcraft.nma_update.frequencies_update
+
 .. autofunction:: springcraft.nma_update.mean_square_fluctuation_update
 
 .. autofunction:: springcraft.nma_update.bfactor_update
 
 .. autofunction:: springcraft.nma_update.dcc_update
+
+.. autofunction:: springcraft.nma_update._calc_updated_eigen
 
 
 Force Fields

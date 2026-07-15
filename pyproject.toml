@@ -14,7 +14,7 @@ keywords = [
     "Bioinformatics",
     "Computational biology",
     "Elastic network models",
-    "Normal mode analysis"
+    "Normal mode analysis",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -29,6 +29,7 @@ classifiers = [
 dependencies = [
     "biotite>=1.0",
     "numpy>=1.25",
+    "scipy>=1.9",
     "typing_extensions>=4.0",
 ]
 
@@ -57,11 +58,42 @@ Documentation = "https://springcraft.biotite-python.org"
 # ---- BUILD SYSTEM ----
 
 [build-system]
-requires = ["hatchling>=1.30"]
+requires = [
+    "hatchling>=1.30",
+    "hatch-cython>=0.6",
+    "setuptools>=82.0",
+    "cython>=3.0",
+    "numpy>=2.0",
+    "scipy>=1.12",
+]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/springcraft"]
+
+[tool.hatch.build.targets.wheel.hooks.cython]
+dependencies = ["hatch-cython"]
+
+[tool.hatch.build.targets.wheel.hooks.cython.options]
+directives = { binding = true, language_level = 3 }
+include_numpy = true
+compile_py = false
+language = "c++"
+define_macros = [
+    ["NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION"],
+]
+compile_args = [
+    { platforms = ["windows"], arg = "/O2" },
+    { platforms = ["linux", "darwin", "freebsd"], arg = "-O3" },
+    { platforms = ["linux", "darwin", "freebsd"], arch = ["x86_64", "amd64", "x86"], arg = "-msse" },
+    { platforms = ["linux", "darwin", "freebsd"], arch = ["x86_64", "amd64", "x86"], arg = "-msse2" },
+    { platforms = ["linux", "darwin", "freebsd"], arch = ["x86_64", "amd64", "x86"], arg = "-mfma" },
+    { platforms = ["linux", "darwin", "freebsd"], arch = ["x86_64", "amd64", "x86"], arg = "-mfpmath=sse" },
+    { platforms = ["linux", "freebsd"], arg = "-march=native" }
+]
+extra_link_args = [
+    { platforms = ["linux", "darwin", "freebsd"], arg = "-lm" }
+]
 
 # ---- SCRIPTS ----
 
