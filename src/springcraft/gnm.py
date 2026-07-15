@@ -13,12 +13,12 @@ import biotite.structure as struc
 import numpy as np
 from typing_extensions import override
 
-from springcraft.enm import ENM
+from springcraft.enm_update import ENMUpdate
 from springcraft.forcefield import ForceField
 from springcraft.interaction import compute_kirchhoff
 
 
-class GNM(ENM):
+class GNM(ENMUpdate):
     """
     This class represents a *Gaussian Network Model*.
 
@@ -88,8 +88,9 @@ class GNM(ENM):
         force_field: ForceField,
         masses=None,
         use_cell_list=True,
+        higher_precision=False,
     ):
-        super().__init__(atoms, force_field, masses, use_cell_list)
+        super().__init__(atoms, force_field, masses, use_cell_list, higher_precision)
 
         self._kirchhoff = None
 
@@ -125,6 +126,77 @@ class GNM(ENM):
     @override
     def dof(self) -> int:
         return 1
+
+    @override
+    def modify_atom(self, atom_i: int, new_atom: bool | struc.Atom):
+        super().modify_atom(atom_i, new_atom)
+
+        delta = self._kirchhoff[atom_i].copy()
+        delta[atom_i] = 0
+
+        if new_atom is not False:
+            # reset contact to original force constant
+            # TODO ff contact_pair_on
+            disp = self._coord - self._coord[atom_i]
+            sq_dist = np.sum(disp * disp, axis=1)
+            sq_dist[atom_i] = np.inf
+
+            if self._ff.cutoff_distance is None:
+                if atom_i > 0:
+                    delta[:atom_i] += self._ff.force_constant(
+                        np.repeat(atom_i, atom_i), np.arange(atom_i), sq_dist[:atom_i]
+                    )
+                if atom_i < self._natoms - 1:
+                    delta[atom_i + 1 :] += self._ff.force_constant(
+                        np.repeat(atom_i, self._natoms - atom_i - 1),
+                        np.arange(atom_i + 1, self._natoms),
+                        sq_dist[atom_i + 1 :],
+                    )
+            else:
+                idxs = np.argwhere(sq_dist <= self._ff.cutoff_distance**2).flatten()
+                delta[idxs] += self._ff.force_constant(
+                    np.repeat(atom_i, len(idxs)), idxs, sq_dist[idxs]
+                )
+
+        for atom_j in np.argwhere(np.abs(delta) >= 1e-9).flatten():
+            if self._covariance is not None:
+                self._modify_covariance(atom_i, atom_j, None, delta[atom_j])
+            self._modify_interactions(atom_i, atom_j, None, delta[atom_j])
+
+    @override
+    def prepare_update(
+        self, atom_i: int, atom_j: int, delta: bool | int | float
+    ) -> tuple[slice, slice, np.ndarray, float]:
+        super().prepare_update(atom_i, atom_j, delta)
+
+        if delta is False:
+            # turn off contact
+            delta = self._kirchhoff[atom_i, atom_j]
+        elif delta is True:
+            # turn on contact (reset to original value)
+            delta = self._kirchhoff[atom_i, atom_j]  # set 0, than add orignal value
+
+            disp = self._coord[atom_j] - self._coord[atom_i]
+            sq_dist = disp @ disp
+            if (
+                self._ff.cutoff_distance is None
+                or sq_dist <= self._ff.cutoff_distance**2
+            ):
+                delta += self._ff.force_constant(
+                    np.atleast_1d(atom_i),
+                    np.atleast_1d(atom_j),
+                    np.atleast_1d(sq_dist),
+                )[0]
+
+        if np.abs(delta) < 1e-10:
+            raise ValueError("No change in interaction strength.")
+
+        return (
+            slice(atom_i, atom_i + 1),
+            slice(atom_j, atom_j + 1),
+            np.atleast_1d(1),
+            delta,
+        )
 
     @overload
     def eigen(

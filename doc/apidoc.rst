@@ -20,6 +20,17 @@ Network Models
    .. automethod:: bfactor
    .. automethod:: dcc
 
+   Model Modifications
+   ~~~~~~~~~~~~~~~~~~~
+   .. automethod:: modify_contact
+   .. automethod:: modify_atom
+
+   Normal Mode Anaysis Update
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~
+   .. automethod:: mean_square_fluctuation_update
+   .. automethod:: bfactor_update
+   .. automethod:: dcc_update
+
 |
 
 .. autoclass:: ANM
@@ -31,11 +42,32 @@ Network Models
    .. automethod:: bfactor
    .. automethod:: dcc
 
+   Model Modifications
+   ~~~~~~~~~~~~~~~~~~~
+   .. automethod:: modify_contact
+   .. automethod:: modify_atom
+
+   Normal Mode Anaysis Update
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~
+   .. automethod:: mean_square_fluctuation_update
+   .. automethod:: bfactor_update
+   .. automethod:: dcc_update
+
 |
 
 .. autoclass:: springcraft.enm.ENM
 
    .. automethod:: eigen
+
+|
+
+.. autoclass:: springcraft.enm_update.ENMUpdate
+
+   .. automethod:: prepare_update
+
+.. autofunction:: springcraft.enm_update.interactions_update
+
+.. autofunction:: springcraft.enm_update.covariance_update
 
 
 Normal Mode Analysis
@@ -48,6 +80,16 @@ Normal Mode Analysis
 .. autofunction:: springcraft.nma.bfactor
 
 .. autofunction:: springcraft.nma.dcc
+
+
+Normal Mode Analysis Update
+---------------------------
+
+.. autofunction:: springcraft.nma_update.mean_square_fluctuation_update
+
+.. autofunction:: springcraft.nma_update.bfactor_update
+
+.. autofunction:: springcraft.nma_update.dcc_update
 
 
 Force Fields

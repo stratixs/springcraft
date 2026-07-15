@@ -20,6 +20,37 @@ residue should be removed.
     )
     anm = springcraft.ANM(atoms, ff)
 
+You can also achieve the same result by changing the model in place using
+:meth:`modify_contact` and :meth:`modify_atom`. This is significantly
+faster than recalculating the entire model from scratch. The same result
+as above can be achieved by running
+
+.. code-block:: python
+
+    ff = springcraft.InvariantForceField(cutoff_distance=13.0)
+    anm = springcraft.ANM(atoms, ff)
+    anm.modify_contact(0, 1, False)
+
+This is especially useful when you want to chain multiple modifications
+together.
+
+
+Normal Mode Analysis of Small Perturbation
+------------------------------------------
+It is also possible to get results for Normal Mode Analysis without changing
+the model and only doing the least amount of calculations necessary to calculate
+the modified results.
+
+The calculation of the mean square fluctuations for all modes for example requires
+only the diagonal elements of the covariance matrix. Instead of recalculating or
+modifying the whole covariance matrix, the specialised logic only calculates the
+change to the diagonal using significantly less resources.
+
+.. code-block:: python
+
+    ff = springcraft.InvariantForceField(cutoff_distance=13.0)
+    anm = springcraft.ANM(atoms, ff)
+    anm.mean_square_fluctuation_update(0, 1, False)
 
 
 Defining a custom force field
